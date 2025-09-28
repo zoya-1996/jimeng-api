@@ -365,24 +365,6 @@ A: 支持 JPG、PNG、WebP、GIF 等常见格式，推荐使用 JPG 或 PNG。
 **Q: 可以使用本地图片吗？**
 A: 需要先将本地图片上传到可访问的网络地址，然后使用该URL。
 
-#### 🧪 **功能测试**
-
-项目提供了完整的测试脚本来验证图生图功能：
-
-```bash
-# 设置环境变量并运行测试
-JIMENG_TOKEN=your_refresh_token node test-image-composition.js
-
-# 或者直接修改脚本中的TOKEN后运行
-node test-image-composition.js
-```
-
-测试脚本包含：
-- ✅ 参数验证测试
-- 🎨 单图风格转换测试
-- 🎭 双图混合合成测试
-- 📋 对象格式图片数组测试
-
 ### 视频生成
 
 **POST** `/v1/chat/completions`
@@ -544,15 +526,6 @@ export const RETRY_CONFIG = {
   RETRY_DELAY: 5000       // 重试延迟 (5秒)
 };
 ```
-
-## 📝 日志说明
-
-系统提供详细的结构化日志：
-
-- **INFO**: 正常操作日志
-- **WARN**: 警告信息（如积分不足提示）
-- **ERROR**: 错误信息（包含详细错误堆栈）
-- **DEBUG**: 调试信息（开发模式下启用）
 
 ## 🐛 故障排除
 
