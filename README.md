@@ -579,7 +579,13 @@ export const RETRY_CONFIG = {
    - 前往即梦官网查看积分余额
    - 系统会提供详细的积分状态信息
 
-## 📄 许可证
+## � 致谢
+
+本项目基于以下开源项目的贡献和启发：
+
+- **[jimeng-free-api-all](https://github.com/wwwzhouhui/jimeng-free-api-all)** - 感谢该项目为即梦API逆向工程提供的重要参考和技术基础，本项目在其基础上进行了功能完善和架构优化
+
+## �📄 许可证
 
 GPL v3 License - 详见 [LICENSE](LICENSE) 文件
 
