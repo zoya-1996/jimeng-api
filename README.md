@@ -383,10 +383,6 @@ node test-image-composition.js
 - 🎭 双图混合合成测试
 - 📋 对象格式图片数组测试
 
-**相关文档**:
-- [详细使用示例](examples/image-composition-examples.md)
-- [技术流程详解](docs/image-composition-technical-flow.md)
-
 ### 视频生成
 
 **POST** `/v1/chat/completions`
