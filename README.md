@@ -18,6 +18,13 @@
 - 📊 **详细日志**: 结构化日志记录，便于调试
 - 🐳 **Docker支持**: 容器化部署，开箱即用
 
+## ⚠ 风险警告
+
+- 此项目属于研究交流学习性质，不接受任何资金捐助和金钱交易！
+- 仅限自用和个人研究，避免对官方造成服务压力，否则轻者可能封号，重者可能触犯法律！
+- 仅限自用和个人研究，避免对官方造成服务压力，否则轻者可能封号，重者可能触犯法律！
+- 仅限自用和个人研究，避免对官方造成服务压力，否则轻者可能封号，重者可能触犯法律！
+
 ## ✨ 新功能亮点
 
 ### 📐 ratio参数支持
@@ -27,7 +34,7 @@
 ```bash
 curl -X POST http://localhost:5100/v1/images/generations \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "美丽的少女，胶片感",
@@ -40,6 +47,9 @@ curl -X POST http://localhost:5100/v1/images/generations \
 **参数优先级**: `ratio` > `size` > `width/height`
 
 ## 🚀 快速开始
+
+### sessionid获取
+![](https://github.com/iptag/jimeng-api/blob/main/get_sessionid.png)
 
 ### 环境要求
 
@@ -117,7 +127,7 @@ debug: false
 ```bash
 curl -X POST http://localhost:5100/v1/images/generations \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "一只可爱的小猫咪",
@@ -127,7 +137,7 @@ curl -X POST http://localhost:5100/v1/images/generations \
 # 使用不同比例的示例
 curl -X POST http://localhost:5100/v1/images/generations \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "壮丽的山水风景",
@@ -137,7 +147,7 @@ curl -X POST http://localhost:5100/v1/images/generations \
 # 使用ratio参数的示例（推荐）
 curl -X POST http://localhost:5100/v1/images/generations \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "美丽的少女，胶片感",
@@ -147,7 +157,7 @@ curl -X POST http://localhost:5100/v1/images/generations \
 # 使用width/height参数的示例
 curl -X POST http://localhost:5100/v1/images/generations \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "现代建筑设计",
@@ -209,7 +219,7 @@ curl -X POST http://localhost:5100/v1/images/generations \
 # 单图风格转换
 curl -X POST http://localhost:5100/v1/images/compositions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "将这张照片转换为油画风格，色彩鲜艳，笔触明显",
@@ -221,7 +231,7 @@ curl -X POST http://localhost:5100/v1/images/compositions \
 # 多图混合合成
 curl -X POST http://localhost:5100/v1/images/compositions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "将这些图片融合成一幅梦幻的超现实主义作品",
@@ -238,7 +248,7 @@ curl -X POST http://localhost:5100/v1/images/compositions \
 # 使用对象格式的图片数组
 curl -X POST http://localhost:5100/v1/images/compositions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "创建一个科幻风格的城市景观",
@@ -365,28 +375,6 @@ A: 支持 JPG、PNG、WebP、GIF 等常见格式，推荐使用 JPG 或 PNG。
 **Q: 可以使用本地图片吗？**
 A: 需要先将本地图片上传到可访问的网络地址，然后使用该URL。
 
-#### 🧪 **功能测试**
-
-项目提供了完整的测试脚本来验证图生图功能：
-
-```bash
-# 设置环境变量并运行测试
-JIMENG_TOKEN=your_refresh_token node test-image-composition.js
-
-# 或者直接修改脚本中的TOKEN后运行
-node test-image-composition.js
-```
-
-测试脚本包含：
-- ✅ 参数验证测试
-- 🎨 单图风格转换测试
-- 🎭 双图混合合成测试
-- 📋 对象格式图片数组测试
-
-**相关文档**:
-- [详细使用示例](examples/image-composition-examples.md)
-- [技术流程详解](docs/image-composition-technical-flow.md)
-
 ### 视频生成
 
 **POST** `/v1/chat/completions`
@@ -394,7 +382,7 @@ node test-image-composition.js
 ```bash
 curl -X POST http://localhost:5100/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-video-3.0",
     "messages": [
@@ -420,7 +408,7 @@ curl -X POST http://localhost:5100/v1/chat/completions \
 ```bash
 curl -X POST http://localhost:5100/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "messages": [
@@ -549,15 +537,6 @@ export const RETRY_CONFIG = {
 };
 ```
 
-## 📝 日志说明
-
-系统提供详细的结构化日志：
-
-- **INFO**: 正常操作日志
-- **WARN**: 警告信息（如积分不足提示）
-- **ERROR**: 错误信息（包含详细错误堆栈）
-- **DEBUG**: 调试信息（开发模式下启用）
-
 ## 🐛 故障排除
 
 ### 常见问题
@@ -566,9 +545,9 @@ export const RETRY_CONFIG = {
    - 检查请求体格式是否正确
    - 系统会自动修复常见格式问题
 
-2. **Token失效**
-   - 重新获取refresh_token
-   - 检查token格式是否正确
+2. **Sessionid失效**
+   - 重新获取Sessionid
+   - 检查Sessionid格式是否正确
 
 3. **生成超时**
    - 图像生成：通常1-3分钟
@@ -579,7 +558,13 @@ export const RETRY_CONFIG = {
    - 前往即梦官网查看积分余额
    - 系统会提供详细的积分状态信息
 
-## 📄 许可证
+## � 致谢
+
+本项目基于以下开源项目的贡献和启发：
+
+- **[jimeng-free-api-all](https://github.com/wwwzhouhui/jimeng-free-api-all)** - 感谢该项目为即梦API逆向工程提供的重要参考和技术基础，本项目在其基础上进行了功能完善和架构优化
+
+## �📄 许可证
 
 GPL v3 License - 详见 [LICENSE](LICENSE) 文件
 
