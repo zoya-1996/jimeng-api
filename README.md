@@ -34,7 +34,7 @@
 ```bash
 curl -X POST http://localhost:5100/v1/images/generations \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "美丽的少女，胶片感",
@@ -124,7 +124,7 @@ debug: false
 ```bash
 curl -X POST http://localhost:5100/v1/images/generations \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "一只可爱的小猫咪",
@@ -134,7 +134,7 @@ curl -X POST http://localhost:5100/v1/images/generations \
 # 使用不同比例的示例
 curl -X POST http://localhost:5100/v1/images/generations \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "壮丽的山水风景",
@@ -144,7 +144,7 @@ curl -X POST http://localhost:5100/v1/images/generations \
 # 使用ratio参数的示例（推荐）
 curl -X POST http://localhost:5100/v1/images/generations \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "美丽的少女，胶片感",
@@ -154,7 +154,7 @@ curl -X POST http://localhost:5100/v1/images/generations \
 # 使用width/height参数的示例
 curl -X POST http://localhost:5100/v1/images/generations \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "现代建筑设计",
@@ -216,7 +216,7 @@ curl -X POST http://localhost:5100/v1/images/generations \
 # 单图风格转换
 curl -X POST http://localhost:5100/v1/images/compositions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "将这张照片转换为油画风格，色彩鲜艳，笔触明显",
@@ -228,7 +228,7 @@ curl -X POST http://localhost:5100/v1/images/compositions \
 # 多图混合合成
 curl -X POST http://localhost:5100/v1/images/compositions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "将这些图片融合成一幅梦幻的超现实主义作品",
@@ -245,7 +245,7 @@ curl -X POST http://localhost:5100/v1/images/compositions \
 # 使用对象格式的图片数组
 curl -X POST http://localhost:5100/v1/images/compositions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "prompt": "创建一个科幻风格的城市景观",
@@ -379,7 +379,7 @@ A: 需要先将本地图片上传到可访问的网络地址，然后使用该UR
 ```bash
 curl -X POST http://localhost:5100/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-video-3.0",
     "messages": [
@@ -405,7 +405,7 @@ curl -X POST http://localhost:5100/v1/chat/completions \
 ```bash
 curl -X POST http://localhost:5100/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_REFRESH_TOKEN" \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
   -d '{
     "model": "jimeng-4.0",
     "messages": [
@@ -542,9 +542,9 @@ export const RETRY_CONFIG = {
    - 检查请求体格式是否正确
    - 系统会自动修复常见格式问题
 
-2. **Token失效**
-   - 重新获取refresh_token
-   - 检查token格式是否正确
+2. **Sessionid失效**
+   - 重新获取Sessionid
+   - 检查Sessionid格式是否正确
 
 3. **生成超时**
    - 图像生成：通常1-3分钟
