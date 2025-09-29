@@ -48,6 +48,9 @@ curl -X POST http://localhost:5100/v1/images/generations \
 
 ## 🚀 快速开始
 
+### sessionid获取
+![](https://github.com/iptag/jimeng-api/blob/main/get_sessionid.png)
+
 ### 环境要求
 
 - Node.js 18+
