@@ -3,17 +3,18 @@ import _ from "lodash";
 import Request from "@/lib/request/Request.ts";
 import { generateImages, generateImageComposition } from "@/api/controllers/images.ts";
 import { tokenSplit } from "@/api/controllers/core.ts";
-import { ASPECT_RATIOS } from "@/api/consts/common.ts";
+import { RESOLUTION_OPTIONS } from "@/api/consts/common.ts";
 import util from "@/lib/util.ts";
 
 // 解析ratio参数为width和height（仅支持官网标准比例）
-function parseRatio(ratio?: string): { width: number; height: number } {
-  if (!ratio) {
-    return { width: 2048, height: 2048 }; // 默认1:1
+function parseDimensions(ratio: string = '1:1', resolution: string = '2k'): { width: number; height: number } {
+  const resolutionGroup = RESOLUTION_OPTIONS[resolution];
+  if (!resolutionGroup) {
+    const supportedResolutions = Object.keys(RESOLUTION_OPTIONS).join(', ');
+    throw new Error(`不支持的分辨率 "${resolution}"。支持的分辨率: ${supportedResolutions}`);
   }
 
-  // 只从ASPECT_RATIOS中查找匹配的标准比例
-  const ratioConfig = ASPECT_RATIOS[ratio];
+  const ratioConfig = resolutionGroup[ratio];
   if (ratioConfig) {
     return {
       width: ratioConfig.width,
@@ -21,9 +22,8 @@ function parseRatio(ratio?: string): { width: number; height: number } {
     };
   }
 
-  // 如果不是标准比例，抛出错误
-  const supportedRatios = Object.keys(ASPECT_RATIOS).join(', ');
-  throw new Error(`不支持的比例 "${ratio}"。支持的比例: ${supportedRatios}`);
+  const supportedRatios = Object.keys(resolutionGroup).join(', ');
+  throw new Error(`在 "${resolution}" 分辨率下，不支持的比例 "${ratio}"。支持的比例: ${supportedRatios}`);
 }
 
 
@@ -39,7 +39,7 @@ export default {
       const foundUnsupported = unsupportedParams.filter(param => bodyKeys.includes(param));
 
       if (foundUnsupported.length > 0) {
-        throw new Error(`不支持的参数: ${foundUnsupported.join(', ')}。请前往项目文档页面查看支持的参数，当前只支持ratio参数控制图像尺寸。`);
+        throw new Error(`不支持的参数: ${foundUnsupported.join(', ')}。请使用 ratio 和 resolution 参数控制图像尺寸。`);
       }
 
       request
@@ -47,6 +47,7 @@ export default {
         .validate("body.prompt", _.isString)
         .validate("body.negative_prompt", v => _.isUndefined(v) || _.isString(v))
         .validate("body.ratio", v => _.isUndefined(v) || _.isString(v))
+        .validate("body.resolution", v => _.isUndefined(v) || _.isString(v))
         .validate("body.sample_strength", v => _.isUndefined(v) || _.isFinite(v))
         .validate("body.response_format", v => _.isUndefined(v) || _.isString(v))
         .validate("headers.authorization", _.isString);
@@ -59,14 +60,13 @@ export default {
         prompt,
         negative_prompt: negativePrompt,
         ratio,
+        resolution,
         sample_strength: sampleStrength,
         response_format,
       } = request.body;
 
-      // 解析尺寸：使用ratio参数
-      const ratioConfig = parseRatio(ratio);
-      const width = ratioConfig.width;
-      const height = ratioConfig.height;
+      // 解析尺寸
+      const { width, height } = parseDimensions(ratio, resolution);
       const responseFormat = _.defaultTo(response_format, "url");
       const imageUrls = await generateImages(model, prompt, {
         width,
@@ -98,7 +98,7 @@ export default {
       const foundUnsupported = unsupportedParams.filter(param => bodyKeys.includes(param));
 
       if (foundUnsupported.length > 0) {
-        throw new Error(`不支持的参数: ${foundUnsupported.join(', ')}。请前往项目文档页面查看支持的参数，当前只支持ratio参数控制图像尺寸。`);
+        throw new Error(`不支持的参数: ${foundUnsupported.join(', ')}。请使用 ratio 和 resolution 参数控制图像尺寸。`);
       }
 
       request
@@ -107,6 +107,7 @@ export default {
         .validate("body.images", _.isArray)
         .validate("body.negative_prompt", v => _.isUndefined(v) || _.isString(v))
         .validate("body.ratio", v => _.isUndefined(v) || _.isString(v))
+        .validate("body.resolution", v => _.isUndefined(v) || _.isString(v))
         .validate("body.sample_strength", v => _.isUndefined(v) || _.isFinite(v))
         .validate("body.response_format", v => _.isUndefined(v) || _.isString(v))
         .validate("headers.authorization", _.isString);
@@ -140,14 +141,13 @@ export default {
         prompt,
         negative_prompt: negativePrompt,
         ratio,
+        resolution,
         sample_strength: sampleStrength,
         response_format,
       } = request.body;
 
-      // 解析尺寸：使用ratio参数
-      const ratioConfig = parseRatio(ratio);
-      const width = ratioConfig.width;
-      const height = ratioConfig.height;
+      // 解析尺寸
+      const { width, height } = parseDimensions(ratio, resolution);
 
       // 提取图片URL
       const imageUrls = images.map(img => _.isString(img) ? img : img.url);
