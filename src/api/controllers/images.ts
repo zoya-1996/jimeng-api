@@ -4,39 +4,34 @@ import crypto from "crypto";
 import APIException from "@/lib/exceptions/APIException.ts";
 import EX from "@/api/consts/exceptions.ts";
 import util from "@/lib/util.ts";
-import { getCredit, receiveCredit, request } from "./core.ts";
+import { getCredit, receiveCredit, request, generateCookie } from "./core.ts";
 import logger from "@/lib/logger.ts";
 import { SmartPoller, PollingStatus } from "@/lib/smart-poller.ts";
-import { DEFAULT_ASSISTANT_ID, DEFAULT_IMAGE_MODEL, DRAFT_VERSION, IMAGE_MODEL_MAP } from "@/api/consts/common.ts";
+import { DEFAULT_IMAGE_MODEL, DRAFT_VERSION, IMAGE_MODEL_MAP, RESOLUTION_OPTIONS } from "@/api/consts/common.ts";
 import { createSignature } from "@/lib/aws-signature.ts";
 
 export const DEFAULT_MODEL = DEFAULT_IMAGE_MODEL;
 
-// 根据宽高计算image_ratio（基于官方抓包数据分析的实际参数）
-function getImageRatio(width: number, height: number): number {
-  // 根据官方抓包数据分析，不同分辨率对应不同的ratio值
-  // 1:1 (2048x2048) -> ratio: 1
-  // 4:3 (2304x1728) -> ratio: 4
-  // 3:4 (1728x2304) -> ratio: 2
-  // 16:9 (2560x1440) -> ratio: 3
-  // 9:16 (1440x2560) -> ratio: 5
-  // 3:2 (2496x1664) -> ratio: 7
-  // 2:3 (1664x2496) -> ratio: 6
-  // 21:9 (3024x1296) -> ratio: 8
+// 根据分辨率和比例获取完整的图像参数
+function getResolutionParams(resolution: string = '2k', ratio: string = '1:1'): { width: number; height: number; image_ratio: number; resolution_type: string } {
+  const resolutionGroup = RESOLUTION_OPTIONS[resolution];
+  if (!resolutionGroup) {
+    const supportedResolutions = Object.keys(RESOLUTION_OPTIONS).join(', ');
+    throw new Error(`不支持的分辨率 "${resolution}"。支持的分辨率: ${supportedResolutions}`);
+  }
 
-  const aspectRatio = width / height;
+  const ratioConfig = resolutionGroup[ratio];
+  if (!ratioConfig) {
+    const supportedRatios = Object.keys(resolutionGroup).join(', ');
+    throw new Error(`在 "${resolution}" 分辨率下，不支持的比例 "${ratio}"。支持的比例: ${supportedRatios}`);
+  }
 
-  if (Math.abs(aspectRatio - 1) < 0.1) return 1;        // 1:1
-  if (Math.abs(aspectRatio - 4/3) < 0.1) return 4;      // 4:3
-  if (Math.abs(aspectRatio - 3/4) < 0.1) return 2;      // 3:4
-  if (Math.abs(aspectRatio - 16/9) < 0.1) return 3;     // 16:9
-  if (Math.abs(aspectRatio - 9/16) < 0.1) return 5;     // 9:16
-  if (Math.abs(aspectRatio - 3/2) < 0.1) return 7;      // 3:2
-  if (Math.abs(aspectRatio - 2/3) < 0.1) return 6;      // 2:3
-  if (Math.abs(aspectRatio - 21/9) < 0.1) return 8;     // 21:9
-
-  // 默认返回1（正方形）
-  return 1;
+  return {
+    width: ratioConfig.width,
+    height: ratioConfig.height,
+    image_ratio: ratioConfig.ratio,
+    resolution_type: resolution,
+  };
 }
 export function getModel(model: string) {
   return IMAGE_MODEL_MAP[model] || IMAGE_MODEL_MAP[DEFAULT_MODEL];
@@ -312,19 +307,20 @@ export async function generateImageComposition(
   prompt: string,
   imageUrls: string[],
   {
-    width = 2560,
-    height = 1440,
+    ratio = '1:1',
+    resolution = '2k',
     sampleStrength = 0.5,
     negativePrompt = "",
   }: {
-    width?: number;
-    height?: number;
+    ratio?: string;
+    resolution?: string;
     sampleStrength?: number;
     negativePrompt?: string;
   },
   refreshToken: string
 ) {
   const model = getModel(_model);
+  const { width, height, image_ratio, resolution_type } = getResolutionParams(resolution, ratio);
   const imageCount = imageUrls.length;
   logger.info(`使用模型: ${_model} 映射模型: ${model} 图生图功能 ${imageCount}张图片 ${width}x${height} 精细度: ${sampleStrength}`);
 
@@ -379,10 +375,10 @@ export async function generateImageComposition(
         draft_content: JSON.stringify({
           type: "draft",
           id: util.uuid(),
-          min_version: "3.2.9",
+          min_version: "3.0.2",
           min_features: [],
           is_from_tsn: true,
-          version: "3.2.9",
+          version: "3.3.2",
           main_component_id: componentId,
           component_list: [
             {
@@ -405,7 +401,7 @@ export async function generateImageComposition(
                 blend: {
                   type: "",
                   id: util.uuid(),
-                  min_version: "3.2.9",
+                  min_version: "3.3.2",
                   min_features: [],
                   core_param: {
                     type: "",
@@ -413,13 +409,13 @@ export async function generateImageComposition(
                     model,
                     prompt: `####${prompt}`,
                     sample_strength: sampleStrength,
-                    image_ratio: 1,
+                    image_ratio: image_ratio,
                     large_image_info: {
                       type: "",
                       id: util.uuid(),
-                      height: 2048,
-                      width: 2048,
-                      resolution_type: "2k"
+                      height: height,
+                      width: width,
+                      resolution_type: resolution_type
                     },
                     intelligent_ratio: false,
                   },
@@ -457,9 +453,6 @@ export async function generateImageComposition(
             },
           ],
         }),
-        http_common_info: {
-          aid: Number(DEFAULT_ASSISTANT_ID),
-        },
       },
     }
   );
@@ -552,13 +545,10 @@ export async function generateImageComposition(
               height: 360,
               uniq_key: "360",
               format: "webp",
-            },
-          ],
-        },
-        http_common_info: {
-          aid: Number(DEFAULT_ASSISTANT_ID),
-        },
-      },
+            }
+          ]
+        }
+      }
     });
 
     if (!result[historyId])
@@ -567,7 +557,10 @@ export async function generateImageComposition(
     status = result[historyId].status;
     failCode = result[historyId].fail_code;
     item_list = result[historyId].item_list || [];
-
+    // 提取 item_ids（保持为字符串，避免长整型精度问题）
+    const item_ids: string[] = (result[historyId]?.pre_gen_item_ids ?? [])
+      .map((x: any) => String(x).trim())
+      .filter(Boolean);
     // 检查是否已生成图片
     if (item_list.length > 0) {
       logger.info(`图生图完成: 状态=${status}, 已生成 ${item_list.length} 张图片`);
@@ -611,19 +604,20 @@ async function generateJimeng40MultiImages(
   _model: string,
   prompt: string,
   {
-    width = 2048,
-    height = 2048,
+    ratio = '1:1',
+    resolution = '2k',
     sampleStrength = 0.5,
     negativePrompt = "",
   }: {
-    width?: number;
-    height?: number;
+    ratio?: string;
+    resolution?: string;
     sampleStrength?: number;
     negativePrompt?: string;
   },
   refreshToken: string
 ) {
   const model = getModel(_model);
+  const { width, height, image_ratio, resolution_type } = getResolutionParams(resolution, ratio);
 
   // 从prompt中提取图片数量，默认为4张
   const targetImageCount = prompt.match(/(\d+)张/) ? parseInt(prompt.match(/(\d+)张/)[1]) : 4;
@@ -699,13 +693,13 @@ async function generateJimeng40MultiImages(
                     negative_prompt: negativePrompt,
                     seed: Math.floor(Math.random() * 100000000) + 2500000000,
                     sample_strength: sampleStrength,
-                    image_ratio: getImageRatio(width, height),
+                    image_ratio: image_ratio,
                     large_image_info: {
                       type: "",
                       id: util.uuid(),
-                      height,
-                      width,
-                      resolution_type: width >= 2048 || height >= 2048 ? "2k" : "1k"
+                      height: height,
+                      width: width,
+                      resolution_type: resolution_type
                     },
                     intelligent_ratio: false
                   },
@@ -718,9 +712,6 @@ async function generateJimeng40MultiImages(
             },
           ],
         }),
-        http_common_info: {
-          aid: Number(DEFAULT_ASSISTANT_ID),
-        },
       },
     }
   );
@@ -817,9 +808,6 @@ async function generateJimeng40MultiImages(
             },
           ],
         },
-        http_common_info: {
-          aid: Number(DEFAULT_ASSISTANT_ID),
-        },
       },
     });
 
@@ -872,22 +860,22 @@ export async function generateImages(
   _model: string,
   prompt: string,
   {
-    width = 2048,
-    height = 2048,
+    ratio = '1:1',
+    resolution = '2k',
     sampleStrength = 0.5,
     negativePrompt = "",
   }: {
-    width?: number;
-    height?: number;
+    ratio?: string;
+    resolution?: string;
     sampleStrength?: number;
     negativePrompt?: string;
   },
   refreshToken: string
 ) {
   const model = getModel(_model);
-  logger.info(`使用模型: ${_model} 映射模型: ${model} ${width}x${height} 精细度: ${sampleStrength} (2K分辨率)`);
+  logger.info(`使用模型: ${_model} 映射模型: ${model} 分辨率: ${resolution} 比例: ${ratio} 精细度: ${sampleStrength}`);
 
-  return await generateImagesInternal(_model, prompt, { width, height, sampleStrength, negativePrompt }, refreshToken);
+  return await generateImagesInternal(_model, prompt, { ratio, resolution, sampleStrength, negativePrompt }, refreshToken);
 }
 
 // 内部实际生成函数
@@ -895,19 +883,20 @@ async function generateImagesInternal(
   _model: string,
   prompt: string,
   {
-    width,
-    height,
+    ratio,
+    resolution,
     sampleStrength = 0.5,
     negativePrompt = "",
   }: {
-    width: number;
-    height: number;
+    ratio: string;
+    resolution: string;
     sampleStrength?: number;
     negativePrompt?: string;
   },
   refreshToken: string
 ) {
   const model = getModel(_model);
+  const { width, height, image_ratio, resolution_type } = getResolutionParams(resolution, ratio);
 
   const { totalCredit, giftCredit, purchaseCredit, vipCredit } = await getCredit(refreshToken);
   if (totalCredit <= 0)
@@ -926,7 +915,7 @@ async function generateImagesInternal(
 
   // 如果是 jimeng-4.0 的多图请求，使用专门的处理逻辑
   if (isJimeng40MultiImage) {
-    return await generateJimeng40MultiImages(_model, prompt, { width, height, sampleStrength, negativePrompt }, refreshToken);
+    return await generateJimeng40MultiImages(_model, prompt, { ratio, resolution, sampleStrength, negativePrompt }, refreshToken);
   }
 
   const componentId = util.uuid();
@@ -995,13 +984,13 @@ async function generateImagesInternal(
                     negative_prompt: negativePrompt,
                     seed: Math.floor(Math.random() * 100000000) + 2500000000,
                     sample_strength: sampleStrength,
-                    image_ratio: getImageRatio(width, height),
+                    image_ratio: image_ratio,
                     large_image_info: {
                       type: "",
                       id: util.uuid(),
-                      height,
-                      width,
-                      resolution_type: width >= 2048 || height >= 2048 ? "2k" : "1k"
+                      height: height,
+                      width: width,
+                      resolution_type: resolution_type
                     },
                     intelligent_ratio: false
                   },
@@ -1014,9 +1003,6 @@ async function generateImagesInternal(
             },
           ],
         }),
-        http_common_info: {
-          aid: Number(DEFAULT_ASSISTANT_ID),
-        },
       },
     }
   );
@@ -1127,10 +1113,7 @@ async function generateImagesInternal(
               format: "webp",
             },
           ],
-        },
-        http_common_info: {
-          aid: Number(DEFAULT_ASSISTANT_ID),
-        },
+        }
       },
     });
 
@@ -1160,6 +1143,12 @@ async function generateImagesInternal(
 
   // 从轮询结果中提取最终数据
   const item_list = finalTaskInfo.item_list || [];
+  // 提取 history_group_key_md5
+  const group_key_md5 = finalTaskInfo.history_group_key_md5 || '0'
+  // 提取 item_ids（保持为字符串，避免长整型精度问题）
+  const item_ids: string[] = (finalTaskInfo?.pre_gen_item_ids ?? [])
+    .map((x: any) => String(x).trim())
+    .filter(Boolean);
   // SmartPoller已经处理了所有错误情况，这里只需要处理结果
 
   // 增强的图片URL提取逻辑
@@ -1193,6 +1182,46 @@ async function generateImagesInternal(
     logger.error(`完整的item_list数据: ${JSON.stringify(item_list, null, 2)}`);
   }
 
+  // try {
+  //   // 步骤 1: 获取页面以提取用户信息字符串
+  //   const generatePageUrl = 'https://jimeng.jianying.com/ai-tool/generate?type=image';
+  //   logger.info(`正在获取页面以提取令牌: ${generatePageUrl}`);
+  //   const pageResponse = await fetch(generatePageUrl, {
+  //     headers: {
+  //       'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+  //       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  //       'Cookie': generateCookie(refreshToken),
+  //     }
+  //   });
+  // 
+  //   if (!pageResponse.ok) {
+  //     throw new Error(`获取生成页面失败: ${pageResponse.status} ${pageResponse.statusText}`);
+  //   }
+  // 
+  //   const html = await pageResponse.text();
+  //   let everphotoToken: string | null = null;
+  //   // 1) 未转义形态: "ever_photo":{"token":"..."}
+  //   const rePlain = /"ever_photo"\s*:\s*{\s*"token"\s*:\s*"([^"]+)"/;
+  //   // 2) 转义形态: \"ever_photo\":\{\\"token\\":\\"...\"
+  //   const reEscaped = /\\"ever_photo\\"\s*:\s*{\s*\\"token\\"\s*:\s*\\"([^"\\]+)\\"/;
+  //   let m = html.match(rePlain);
+  //   if (m && m[1]) {
+  //     everphotoToken = m[1];
+  //   } else {
+  //     m = html.match(reEscaped);
+  //     if (m && m[1]) {
+  //       everphotoToken = m[1];
+  //     }
+  //   }
+  // 
+  //   if (!everphotoToken) {
+  //     logger.warn('无法从生成页面中提取 everphoto 令牌。跳过 GetUpdates 调用。');
+  //   } else {
+  //     logger.info(`成功提取 everphoto 令牌: ${everphotoToken.slice(0, 8)}***`);
+  //   }
+  // } catch (error) {
+  //   logger.error(`在获取更新的预备步骤或执行过程中发生错误: ${error.message}`);
+  // }
   return imageUrls;
 }
 

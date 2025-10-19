@@ -10,7 +10,18 @@ import { createParser } from "eventsource-parser";
 import logger from "@/lib/logger.ts";
 import util from "@/lib/util.ts";
 import { JimengErrorHandler, JimengErrorResponse } from "@/lib/error-handler.ts";
-import { DEFAULT_ASSISTANT_ID, PLATFORM_CODE, VERSION_CODE, RETRY_CONFIG } from "@/api/consts/common.ts";
+import { 
+  BASE_URL_CN,
+  BASE_URL_US,
+  BASE_URL_US_COMMERCE,
+  DEFAULT_ASSISTANT_ID_CN,
+  DEFAULT_ASSISTANT_ID_US,
+  PLATFORM_CODE,
+  REGION_CN,
+  REGION_US,
+  VERSION_CODE,
+  RETRY_CONFIG
+} from "@/api/consts/common.ts";
 
 // 模型名称
 const MODEL_NAME = "jimeng";
@@ -27,12 +38,9 @@ const FAKE_HEADERS = {
   "Accept-language": "zh-CN,zh;q=0.9",
   "Cache-control": "no-cache",
   "Last-event-id": "undefined",
-  Appid: DEFAULT_ASSISTANT_ID,
   Appvr: VERSION_CODE,
-  Origin: "https://jimeng.jianying.com",
   Pragma: "no-cache",
   Priority: "u=1, i",
-  Referer: "https://jimeng.jianying.com",
   Pf: PLATFORM_CODE,
   "Sec-Ch-Ua":
     '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
@@ -62,18 +70,20 @@ export async function acquireToken(refreshToken: string): Promise<string> {
  * 生成cookie
  */
 export function generateCookie(refreshToken: string) {
+  const isUS = refreshToken.toLowerCase().startsWith('us-');
+  const token = isUS ? refreshToken.substring(3) : refreshToken;
   return [
     `_tea_web_id=${WEB_ID}`,
     `is_staff_user=false`,
-    `store-region=cn-gd`,
+    `store-region=${isUS ? 'us' : 'cn-gd'}`,
     `store-region-src=uid`,
-    `sid_guard=${refreshToken}%7C${util.unixTimestamp()}%7C5184000%7CMon%2C+03-Feb-2025+08%3A17%3A09+GMT`,
+    `sid_guard=${token}%7C${util.unixTimestamp()}%7C5184000%7CMon%2C+03-Feb-2025+08%3A17%3A09+GMT`,
     `uid_tt=${USER_ID}`,
     `uid_tt_ss=${USER_ID}`,
-    `sid_tt=${refreshToken}`,
-    `sessionid=${refreshToken}`,
-    `sessionid_ss=${refreshToken}`,
-    `sid_tt=${refreshToken}`
+    `sid_tt=${token}`,
+    `sessionid=${token}`,
+    `sessionid_ss=${token}`,
+    `sid_tt=${token}`
   ].join("; ");
 }
 
@@ -88,10 +98,7 @@ export async function getCredit(refreshToken: string) {
   } = await request("POST", "/commerce/v1/benefits/user_credit", refreshToken, {
     data: {},
     headers: {
-      // Cookie: 'x-web-secsdk-uid=ef44bd0d-0cf6-448c-b517-fd1b5a7267ba; s_v_web_id=verify_m4b1lhlu_DI8qKRlD_7mJJ_4eqx_9shQ_s8eS2QLAbc4n; passport_csrf_token=86f3619c0c4a9c13f24117f71dc18524; passport_csrf_token_default=86f3619c0c4a9c13f24117f71dc18524; n_mh=9-mIeuD4wZnlYrrOvfzG3MuT6aQmCUtmr8FxV8Kl8xY; sid_guard=a7eb745aec44bb3186dbc2083ea9e1a6%7C1733386629%7C5184000%7CMon%2C+03-Feb-2025+08%3A17%3A09+GMT; uid_tt=59a46c7d3f34bda9588b93590cca2e12; uid_tt_ss=59a46c7d3f34bda9588b93590cca2e12; sid_tt=a7eb745aec44bb3186dbc2083ea9e1a6; sessionid=a7eb745aec44bb3186dbc2083ea9e1a6; sessionid_ss=a7eb745aec44bb3186dbc2083ea9e1a6; is_staff_user=false; sid_ucp_v1=1.0.0-KGRiOGY2ODQyNWU1OTk3NzRhYTE2ZmZhYmFjNjdmYjY3NzRmZGRiZTgKHgjToPCw0cwbEIXDxboGGJ-tHyAMMITDxboGOAhAJhoCaGwiIGE3ZWI3NDVhZWM0NGJiMzE4NmRiYzIwODNlYTllMWE2; ssid_ucp_v1=1.0.0-KGRiOGY2ODQyNWU1OTk3NzRhYTE2ZmZhYmFjNjdmYjY3NzRmZGRiZTgKHgjToPCw0cwbEIXDxboGGJ-tHyAMMITDxboGOAhAJhoCaGwiIGE3ZWI3NDVhZWM0NGJiMzE4NmRiYzIwODNlYTllMWE2; store-region=cn-gd; store-region-src=uid; user_spaces_idc={"7444764277623653426":"lf"}; ttwid=1|cxHJViEev1mfkjntdMziir8SwbU8uPNVSaeh9QpEUs8|1733966961|d8d52f5f56607427691be4ac44253f7870a34d25dd05a01b4d89b8a7c5ea82ad; _tea_web_id=7444838473275573797; fpk1=fa6c6a4d9ba074b90003896f36b6960066521c1faec6a60bdcb69ec8ddf85e8360b4c0704412848ec582b2abca73d57a; odin_tt=efe9dc150207879b88509e651a1c4af4e7ffb4cfcb522425a75bd72fbf894eda570bbf7ffb551c8b1de0aa2bfa0bd1be6c4157411ecdcf4464fcaf8dd6657d66',
       Referer: "https://jimeng.jianying.com/ai-tool/image/generate",
-      // "Device-Time": 1733966964,
-      // Sign: "f3dbb824b378abea7c03cbb152b3a365"
     }
   });
   logger.info(`\n积分信息: \n赠送积分: ${gift_credit}, 购买积分: ${purchase_credit}, VIP积分: ${vip_credit}`);
@@ -136,18 +143,33 @@ export async function request(
   refreshToken: string,
   options: AxiosRequestConfig = {}
 ) {
-  const token = await acquireToken(refreshToken);
+  const isUS = refreshToken.toLowerCase().startsWith('us-');
+  const token = await acquireToken(isUS ? refreshToken.substring(3) : refreshToken);
   const deviceTime = util.unixTimestamp();
   const sign = util.md5(
     `9e2c|${uri.slice(-7)}|${PLATFORM_CODE}|${VERSION_CODE}|${deviceTime}||11ac`
   );
 
-  const fullUrl = `https://jimeng.jianying.com${uri}`;
+    let baseUrl: string;
+  if (isUS) {
+    if (uri.startsWith("/commerce/")) {
+      baseUrl = BASE_URL_US_COMMERCE;
+    } else {
+      baseUrl = BASE_URL_US;
+    }
+  } else {
+    baseUrl = BASE_URL_CN;
+  }
+  const aid = isUS ? DEFAULT_ASSISTANT_ID_US : DEFAULT_ASSISTANT_ID_CN;
+  const region = isUS ? REGION_US : REGION_CN;
+  const origin = new URL(baseUrl).origin;
+
+  const fullUrl = `${baseUrl}${uri}`;
   const requestParams = {
-    aid: DEFAULT_ASSISTANT_ID,
+    aid: aid,
     device_platform: "web",
-    region: "cn", // 改为小写，与网页请求一致
-    webId: WEB_ID, // 使用webId而不是web_id
+    region: region,
+    webId: WEB_ID,
     da_version: "3.3.2",
     web_component_open_flag: 1,
     web_version: "7.5.0",
@@ -157,7 +179,10 @@ export async function request(
 
   const headers = {
     ...FAKE_HEADERS,
-    Cookie: generateCookie(token),
+    Origin: origin,
+    Referer: origin,
+    Appid: aid,
+    Cookie: generateCookie(refreshToken),
     "Device-Time": deviceTime,
     Sign: sign,
     "Sign-Ver": "1",
@@ -200,6 +225,7 @@ export async function request(
       // 记录响应数据摘要
       const responseDataSummary = JSON.stringify(response.data).substring(0, 500) +
         (JSON.stringify(response.data).length > 500 ? "..." : "");
+      //const responseDataSummary = JSON.stringify(response.data)
       logger.info(`响应数据摘要: ${responseDataSummary}`);
 
       // 检查HTTP状态码

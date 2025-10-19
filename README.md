@@ -1,17 +1,15 @@
 # Jimeng API
 
-🎨 **免费的AI图像和视频生成API服务** - 基于即梦AI的逆向工程实现，提供与OpenAI API兼容的接口格式
+🎨 **免费的AI图像和视频生成API服务** - 基于即梦AI（国内站）和dreamina（国际站）的逆向工程实现，提供与OpenAI API兼容的接口格式
 
-[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
-[![Docker](https://img.shields.io/badge/Docker-支持-blue.svg)](https://www.docker.com/)
-[![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/) [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/) [![Docker](https://img.shields.io/badge/Docker-支持-blue.svg)](https://www.docker.com/) [![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
 
 ## ✨ 特性
 
 - 🎨 **AI图像生成**: 支持多种模型和分辨率（默认2K，支持4K）
 - 🖼️ **图生图合成**: 支持多图混合、风格转换、内容合成
 - 🎬 **AI视频生成**: 支持文本到视频生成
+- 🌐 **国际站支持**: 新增对即梦国际站（dreamina）文生图API的支持，可能不稳定，有问题提issue
 - 💬 **聊天接口**: OpenAI生图格式兼容的API
 - 🔄 **智能轮询**: 自适应轮询机制，优化生成效率
 - 🛡️ **统一异常处理**: 完善的错误处理和重试机制
@@ -43,27 +41,6 @@ curl -X POST http://localhost:5100/v1/images/generations \
   }'
 ```
 
-**支持的比例及对应分辨率**：
-
-| resolution | ratio | 分辨率 |
-|---|---|---|
-| `2k` (默认) | `1:1` | 2048×2048 |
-| | `4:3` | 2304×1728 |
-| | `3:4` | 1728×2304 |
-| | `16:9` | 2560×1440 |
-| | `9:16` | 1440×2560 |
-| | `3:2` | 2496×1664 |
-| | `2:3` | 1664×2496 |
-| | `21:9` | 3024×1296 |
-| `4k` | `1:1` | 4096×4096 |
-| | `4:3` | 4608×3456 |
-| | `3:4` | 3456×4608 |
-| | `16:9` | 5120×2880 |
-| | `9:16` | 2880×5120 |
-| | `3:2` | 4992×3328 |
-| | `2:3` | 3328×4992 |
-| | `21:9` | 6048×2592 |
-
 **支持的resolution**: `2k`, `4k`
 
 **支持的ratio**: `1:1`, `4:3`, `3:4`, `16:9`, `9:16`, `3:2`, `2:3`, `21:9`
@@ -71,6 +48,9 @@ curl -X POST http://localhost:5100/v1/images/generations \
 ## 🚀 快速开始
 
 ### sessionid获取
+- 国内站 (即梦)和国际站 (dreamina)获取sessionid的方法相同，见下图。
+> **注意**: 国内站和国际站api接口相同，但国际站的sessionid需要手动添加**us-**，比如`Bearer us-xxxxx`，才能访问国际站，否则默认国内站。
+
 ![](https://github.com/iptag/jimeng-api/blob/main/get_sessionid.png)
 
 ### 环境要求
@@ -101,12 +81,11 @@ cd jimeng-api
 # 安装依赖
 npm install
 
-# 配置环境
-cp configs/dev/service.yml.example configs/dev/service.yml
-cp configs/dev/system.yml.example configs/dev/system.yml
+# 编译文件
+npm run build
 
 # 启动服务
-npm start
+npm run dev
 ```
 
 #### 方式三：Docker部署（推荐）
@@ -165,6 +144,12 @@ debug: false
 
 ## 📖 API文档
 
+### 🌍 国际站支持 (dreamina)
+
+除了支持国内版的即梦AI，项目现已集成对国际站 **dreamina** 的支持。
+
+- **如何使用**: 使用从国际站获取的 `sessionid` ，并且需要手动添加**us-**，比如`Bearer us-xxxxx`，才能访问国际站，否则默认国内站。
+
 ### 图像生成
 
 **POST** `/v1/images/generations`
@@ -206,6 +191,27 @@ curl -X POST http://localhost:5100/v1/images/generations \
 - `jimeng-3.0`
 - `jimeng-2.1`
 - `jimeng-xl-pro`
+
+
+**支持的比例及对应分辨率** ：
+| resolution | ratio | 分辨率 |
+|---|---|---|
+| `2k` (默认) | `1:1` | 2048×2048 |
+| | `4:3` | 2304×1728 |
+| | `3:4` | 1728×2304 |
+| | `16:9` | 2560×1440 |
+| | `9:16` | 1440×2560 |
+| | `3:2` | 2496×1664 |
+| | `2:3` | 1664×2496 |
+| | `21:9` | 3024×1296 |
+| `4k` | `1:1` | 4096×4096 |
+| | `4:3` | 4608×3456 |
+| | `3:4` | 3456×4608 |
+| | `16:9` | 5120×2880 |
+| | `9:16` | 2880×5120 |
+| | `3:2` | 4992×3328 |
+| | `2:3` | 3328×4992 |
+| | `21:9` | 6048×2592 |
 
 ### 图生图 (图片合成)
 
@@ -274,14 +280,14 @@ curl -X POST http://localhost:5100/v1/images/compositions \
 
 2. **图片预处理阶段** (5-30秒，取决于图片数量和大小)
    - **下载外部图片**: 从提供的URL下载图片到本地
-   - **获取上传令牌**: 向即梦服务器申请图片上传权限
-   - **图片上传**: 使用AWS签名认证将图片上传到即梦存储系统
+   - **获取上传令牌**: 向即梦/Trik服务器申请图片上传权限
+   - **图片上传**: 使用AWS签名认证将图片上传到即梦/Trik存储系统
    - **格式转换**: 自动处理图片格式和尺寸优化
 
 3. **任务提交阶段** (2-5秒)
    - 构建图片合成任务参数
    - 设置合成模式为 "blend" (混合模式)
-   - 提交任务到即梦AI生成队列
+   - 提交任务到即梦/dreamina生成队列
    - 获取任务ID (history_id)
 
 4. **AI生成阶段** (30秒-5分钟)
@@ -547,7 +553,7 @@ export const RETRY_CONFIG = {
    - 系统会自动修复常见格式问题
 
 2. **Sessionid失效**
-   - 重新获取Sessionid
+   - 重新获取对应站点的Sessionid
    - 检查Sessionid格式是否正确
 
 3. **生成超时**
@@ -556,16 +562,16 @@ export const RETRY_CONFIG = {
    - 系统会自动处理超时情况
 
 4. **积分不足**
-   - 前往即梦官网查看积分余额
+   - 前往即梦/Trik官网查看积分余额
    - 系统会提供详细的积分状态信息
 
-## � 致谢
+## 🙏 致谢
 
 本项目基于以下开源项目的贡献和启发：
 
 - **[jimeng-free-api-all](https://github.com/wwwzhouhui/jimeng-free-api-all)** - 感谢该项目为即梦API逆向工程提供的重要参考和技术基础，本项目在其基础上进行了功能完善和架构优化
 
-## �📄 许可证
+## 📄 许可证
 
 GPL v3 License - 详见 [LICENSE](LICENSE) 文件
 

@@ -6,27 +6,6 @@ import { tokenSplit } from "@/api/controllers/core.ts";
 import { RESOLUTION_OPTIONS } from "@/api/consts/common.ts";
 import util from "@/lib/util.ts";
 
-// 解析ratio参数为width和height（仅支持官网标准比例）
-function parseDimensions(ratio: string = '1:1', resolution: string = '2k'): { width: number; height: number } {
-  const resolutionGroup = RESOLUTION_OPTIONS[resolution];
-  if (!resolutionGroup) {
-    const supportedResolutions = Object.keys(RESOLUTION_OPTIONS).join(', ');
-    throw new Error(`不支持的分辨率 "${resolution}"。支持的分辨率: ${supportedResolutions}`);
-  }
-
-  const ratioConfig = resolutionGroup[ratio];
-  if (ratioConfig) {
-    return {
-      width: ratioConfig.width,
-      height: ratioConfig.height
-    };
-  }
-
-  const supportedRatios = Object.keys(resolutionGroup).join(', ');
-  throw new Error(`在 "${resolution}" 分辨率下，不支持的比例 "${ratio}"。支持的比例: ${supportedRatios}`);
-}
-
-
 
 export default {
   prefix: "/v1/images",
@@ -66,11 +45,10 @@ export default {
       } = request.body;
 
       // 解析尺寸
-      const { width, height } = parseDimensions(ratio, resolution);
       const responseFormat = _.defaultTo(response_format, "url");
       const imageUrls = await generateImages(model, prompt, {
-        width,
-        height,
+        ratio,
+        resolution,
         sampleStrength,
         negativePrompt,
       }, token);
@@ -147,15 +125,10 @@ export default {
       } = request.body;
 
       // 解析尺寸
-      const { width, height } = parseDimensions(ratio, resolution);
-
-      // 提取图片URL
-      const imageUrls = images.map(img => _.isString(img) ? img : img.url);
-
       const responseFormat = _.defaultTo(response_format, "url");
       const resultUrls = await generateImageComposition(model, prompt, imageUrls, {
-        width,
-        height,
+        ratio,
+        resolution,
         sampleStrength,
         negativePrompt,
       }, token);
