@@ -112,7 +112,11 @@ class Server {
         this.app.use(async (ctx: any, next: Function) => {
             if (!ctx._jsonProcessed) {
                 await koaBody(Object.assign(_.clone(config.system.requestBody), {
-                    enableTypes: ['form', 'text', 'xml']
+                    multipart: true, // 开启multipart文件上传
+                    formidable: {
+                        maxFileSize: 10 * 1024 * 1024, // 限制最大10MB
+                    },
+                    enableTypes: ['json', 'form', 'text', 'xml'] // 确保form类型被启用
                 }))(ctx, next);
             } else {
                 await next();
@@ -176,8 +180,13 @@ class Server {
         return new Promise(resolve => {
             const request = new Request(ctx);
             try {
-                if(config.system.requestLog)
-                    logger.info(`-> ${request.method} ${request.url}`);
+                if(config.system.requestLog) {
+                    if (request.url === '/ping') {
+                        logger.debug(`-> ${request.method} ${request.url}`);
+                    } else {
+                        logger.info(`-> ${request.method} ${request.url}`);
+                    }
+                }
                     routeFn(request)
                 .then(response => {
                     try {

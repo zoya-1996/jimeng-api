@@ -301,11 +301,157 @@ async function uploadImageFromUrl(imageUrl: string, refreshToken: string): Promi
   }
 }
 
+// 图片上传功能：将本地图片Buffer上传到即梦系统
+async function uploadImageFromBuffer(imageBuffer: Buffer, refreshToken: string): Promise<string> {
+  try {
+    logger.info(`开始通过Buffer上传图片...`);
+
+    // 第一步：获取上传令牌
+    const tokenResult = await request("post", "/mweb/v1/get_upload_token", refreshToken, {
+      data: {
+        scene: 2, // AIGC 图片上传场景
+      },
+    });
+
+    const { access_key_id, secret_access_key, session_token, service_id } = tokenResult;
+    if (!access_key_id || !secret_access_key || !session_token) {
+      throw new Error("获取上传令牌失败");
+    }
+
+    // 使用固定的service_id
+    const actualServiceId = service_id || "tb4s082cfz";
+
+    logger.info(`获取上传令牌成功: service_id=${actualServiceId}`);
+
+    // 直接使用传入的 imageBuffer
+    const fileSize = imageBuffer.byteLength;
+    const crc32 = calculateCRC32(imageBuffer);
+
+    logger.info(`图片Buffer: 大小=${fileSize}字节, CRC32=${crc32}`);
+
+    // 第二步：申请图片上传权限
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[:\-]/g, '').replace(/\.\d{3}Z$/, 'Z');
+    const randomStr = Math.random().toString(36).substring(2, 12);
+    const applyUrl = `https://imagex.bytedanceapi.com/?Action=ApplyImageUpload&Version=2018-08-01&ServiceId=${actualServiceId}&FileSize=${fileSize}&s=${randomStr}`;
+
+    const requestHeaders = {
+      'x-amz-date': timestamp,
+      'x-amz-security-token': session_token
+    };
+
+    const authorization = createSignature('GET', applyUrl, requestHeaders, access_key_id, secret_access_key, session_token);
+
+    const applyResponse = await fetch(applyUrl, {
+      method: 'GET',
+      headers: {
+        'accept': '*/*',
+        'authorization': authorization,
+        'origin': 'https://jimeng.jianying.com',
+        'referer': 'https://jimeng.jianying.com/ai-tool/generate',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+        'x-amz-date': timestamp,
+        'x-amz-security-token': session_token,
+      },
+    });
+
+    if (!applyResponse.ok) {
+      const errorText = await applyResponse.text();
+      throw new Error(`申请上传权限失败: ${applyResponse.status} - ${errorText}`);
+    }
+
+    const applyResult = await applyResponse.json();
+
+    if (applyResult?.ResponseMetadata?.Error) {
+      throw new Error(`申请上传权限失败: ${JSON.stringify(applyResult.ResponseMetadata.Error)}`);
+    }
+
+    const uploadAddress = applyResult?.Result?.UploadAddress;
+    if (!uploadAddress || !uploadAddress.StoreInfos || !uploadAddress.UploadHosts) {
+      throw new Error(`获取上传地址失败: ${JSON.stringify(applyResult)}`);
+    }
+
+    const storeInfo = uploadAddress.StoreInfos[0];
+    const uploadHost = uploadAddress.UploadHosts[0];
+    const auth = storeInfo.Auth;
+    const uploadUrl = `https://${uploadHost}/upload/v1/${storeInfo.StoreUri}`;
+
+    // 第三步：上传图片文件
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': auth,
+        'Content-CRC32': crc32,
+        'Content-Disposition': 'attachment; filename="undefined"',
+        'Content-Type': 'application/octet-stream',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+      },
+      body: imageBuffer,
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      throw new Error(`图片上传失败: ${uploadResponse.status} - ${errorText}`);
+    }
+
+    // 第四步：提交上传
+    const commitUrl = `https://imagex.bytedanceapi.com/?Action=CommitImageUpload&Version=2018-08-01&ServiceId=${actualServiceId}`;
+    const commitTimestamp = new Date().toISOString().replace(/[:\-]/g, '').replace(/\.\d{3}Z$/, 'Z');
+    const commitPayload = JSON.stringify({
+      SessionKey: uploadAddress.SessionKey,
+      SuccessActionStatus: "200"
+    });
+    const payloadHash = crypto.createHash('sha256').update(commitPayload, 'utf8').digest('hex');
+    const commitRequestHeaders = {
+      'x-amz-date': commitTimestamp,
+      'x-amz-security-token': session_token,
+      'x-amz-content-sha256': payloadHash
+    };
+    const commitAuthorization = createSignature('POST', commitUrl, commitRequestHeaders, access_key_id, secret_access_key, session_token, commitPayload);
+
+    const commitResponse = await fetch(commitUrl, {
+      method: 'POST',
+      headers: {
+        'authorization': commitAuthorization,
+        'content-type': 'application/json',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+        'x-amz-date': commitTimestamp,
+        'x-amz-security-token': session_token,
+        'x-amz-content-sha256': payloadHash,
+      },
+      body: commitPayload,
+    });
+
+    if (!commitResponse.ok) {
+      const errorText = await commitResponse.text();
+      throw new Error(`提交上传失败: ${commitResponse.status} - ${errorText}`);
+    }
+
+    const commitResult = await commitResponse.json();
+    if (commitResult?.ResponseMetadata?.Error) {
+      throw new Error(`提交上传失败: ${JSON.stringify(commitResult.ResponseMetadata.Error)}`);
+    }
+    if (!commitResult?.Result?.Results || commitResult.Result.Results.length === 0) {
+      throw new Error(`提交上传响应缺少结果: ${JSON.stringify(commitResult)}`);
+    }
+    const uploadResult = commitResult.Result.Results[0];
+    if (uploadResult.UriStatus !== 2000) {
+      throw new Error(`图片上传状态异常: UriStatus=${uploadResult.UriStatus}`);
+    }
+    const fullImageUri = uploadResult.Uri;
+    logger.info(`图片Buffer上传完成: ${fullImageUri}`);
+    return fullImageUri;
+  } catch (error) {
+    logger.error(`图片Buffer上传失败: ${error.message}`);
+    throw error;
+  }
+}
+
 // 图片合成功能：先上传图片，然后进行图生图
 export async function generateImageComposition(
   _model: string,
   prompt: string,
-  imageUrls: string[],
+  images: (string | Buffer)[],
   {
     ratio = '1:1',
     resolution = '2k',
@@ -321,7 +467,7 @@ export async function generateImageComposition(
 ) {
   const model = getModel(_model);
   const { width, height, image_ratio, resolution_type } = getResolutionParams(resolution, ratio);
-  const imageCount = imageUrls.length;
+  const imageCount = images.length;
   logger.info(`使用模型: ${_model} 映射模型: ${model} 图生图功能 ${imageCount}张图片 ${width}x${height} 精细度: ${sampleStrength}`);
 
   const { totalCredit } = await getCredit(refreshToken);
@@ -330,9 +476,19 @@ export async function generateImageComposition(
 
   // 上传所有输入图片
   const uploadedImageIds: string[] = [];
-  for (let i = 0; i < imageUrls.length; i++) {
+  for (let i = 0; i < images.length; i++) {
     try {
-      const imageId = await uploadImageFromUrl(imageUrls[i], refreshToken);
+      const image = images[i];
+      let imageId: string;
+      if (typeof image === 'string') {
+        // It's a URL
+        logger.info(`正在处理第 ${i + 1}/${imageCount} 张图片 (URL)...`);
+        imageId = await uploadImageFromUrl(image, refreshToken);
+      } else {
+        // It's a Buffer
+        logger.info(`正在处理第 ${i + 1}/${imageCount} 张图片 (Buffer)...`);
+        imageId = await uploadImageFromBuffer(image, refreshToken);
+      }
       uploadedImageIds.push(imageId);
       logger.info(`图片 ${i + 1}/${imageCount} 上传成功: ${imageId}`);
     } catch (error) {
@@ -463,19 +619,17 @@ export async function generateImageComposition(
 
   logger.info(`图生图任务已提交，history_id: ${historyId}，等待生成完成...`);
 
-  let status = 20, failCode: string | undefined, item_list: any[] = [];
-  let pollCount = 0;
-  const maxPollCount = 600; // 最多轮询10分钟
+  const maxPollCount = 900; // 15分钟超时
 
-  while (pollCount < maxPollCount) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    pollCount++;
+  // 使用智能轮询器
+  const poller = new SmartPoller({
+    maxPollCount,
+    expectedItemCount: 1, // 图生图通常生成1张图片
+    type: 'image'
+  });
 
-    if (pollCount % 30 === 0) {
-      logger.info(`图生图进度: 第 ${pollCount} 次轮询 (history_id: ${historyId})，当前状态: ${status}，已生成: ${item_list.length} 张图片...`);
-    }
-
-    const result = await request("post", "/mweb/v1/get_history_by_ids", refreshToken, {
+  const { result: pollingResult, data: finalTaskInfo } = await poller.poll(async () => {
+    const response = await request("post", "/mweb/v1/get_history_by_ids", refreshToken, {
       data: {
         history_ids: [historyId],
         image_info: {
@@ -483,119 +637,78 @@ export async function generateImageComposition(
           height: 2048,
           format: "webp",
           image_scene_list: [
-            {
-              scene: "smart_crop",
-              width: 360,
-              height: 360,
-              uniq_key: "smart_crop-w:360-h:360",
-              format: "webp",
-            },
-            {
-              scene: "smart_crop",
-              width: 480,
-              height: 480,
-              uniq_key: "smart_crop-w:480-h:480",
-              format: "webp",
-            },
-            {
-              scene: "smart_crop",
-              width: 720,
-              height: 720,
-              uniq_key: "smart_crop-w:720-h:720",
-              format: "webp",
-            },
-            {
-              scene: "smart_crop",
-              width: 720,
-              height: 480,
-              uniq_key: "smart_crop-w:720-h:480",
-              format: "webp",
-            },
-            {
-              scene: "normal",
-              width: 2400,
-              height: 2400,
-              uniq_key: "2400",
-              format: "webp",
-            },
-            {
-              scene: "normal",
-              width: 1080,
-              height: 1080,
-              uniq_key: "1080",
-              format: "webp",
-            },
-            {
-              scene: "normal",
-              width: 720,
-              height: 720,
-              uniq_key: "720",
-              format: "webp",
-            },
-            {
-              scene: "normal",
-              width: 480,
-              height: 480,
-              uniq_key: "480",
-              format: "webp",
-            },
-            {
-              scene: "normal",
-              width: 360,
-              height: 360,
-              uniq_key: "360",
-              format: "webp",
-            }
+            { scene: "smart_crop", width: 360, height: 360, uniq_key: "smart_crop-w:360-h:360", format: "webp" },
+            { scene: "smart_crop", width: 480, height: 480, uniq_key: "smart_crop-w:480-h:480", format: "webp" },
+            { scene: "smart_crop", width: 720, height: 720, uniq_key: "smart_crop-w:720-h:720", format: "webp" },
+            { scene: "smart_crop", width: 720, height: 480, uniq_key: "smart_crop-w:720-h:480", format: "webp" },
+            { scene: "normal", width: 2400, height: 2400, uniq_key: "2400", format: "webp" },
+            { scene: "normal", width: 1080, height: 1080, uniq_key: "1080", format: "webp" },
+            { scene: "normal", width: 720, height: 720, uniq_key: "720", format: "webp" },
+            { scene: "normal", width: 480, height: 480, uniq_key: "480", format: "webp" },
+            { scene: "normal", width: 360, height: 360, uniq_key: "360", format: "webp" }
           ]
         }
       }
     });
 
-    if (!result[historyId])
+    if (!response[historyId]) {
+      logger.error(`历史记录不存在: historyId=${historyId}`);
       throw new APIException(EX.API_IMAGE_GENERATION_FAILED, "记录不存在");
-
-    status = result[historyId].status;
-    failCode = result[historyId].fail_code;
-    item_list = result[historyId].item_list || [];
-    // 提取 item_ids（保持为字符串，避免长整型精度问题）
-    const item_ids: string[] = (result[historyId]?.pre_gen_item_ids ?? [])
-      .map((x: any) => String(x).trim())
-      .filter(Boolean);
-    // 检查是否已生成图片
-    if (item_list.length > 0) {
-      logger.info(`图生图完成: 状态=${status}, 已生成 ${item_list.length} 张图片`);
-      break;
     }
 
-    // 记录详细状态
-    if (pollCount % 60 === 0) {
-      logger.info(`图生图详细状态: status=${status}, item_list.length=${item_list.length}, failCode=${failCode || 'none'}`);
+    const taskInfo = response[historyId];
+    const currentStatus = taskInfo.status;
+    const currentFailCode = taskInfo.fail_code;
+    const currentItemList = taskInfo.item_list || [];
+    const finishTime = taskInfo.task?.finish_time || 0;
+
+    // 返回轮询状态和数据
+    return {
+      status: {
+        status: currentStatus,
+        failCode: currentFailCode,
+        itemCount: currentItemList.length,
+        finishTime,
+        historyId
+      } as PollingStatus,
+      data: taskInfo
+    };
+  }, historyId);
+
+  // 从轮询结果中提取最终数据
+  const item_list = finalTaskInfo.item_list || [];
+
+  // SmartPoller已经处理了所有错误情况，这里只需要处理结果
+  const resultImageUrls = item_list.map((item: any, index: number) => {
+    let imageUrl: string | null = null;
+
+    // 尝试多种可能的URL路径
+    if (item?.image?.large_images?.[0]?.image_url) {
+      imageUrl = item.image.large_images[0].image_url;
+      logger.debug(`图片 ${index + 1}: 使用 large_images URL`);
+    } else if (item?.common_attr?.cover_url) {
+      imageUrl = item.common_attr.cover_url;
+      logger.debug(`图片 ${index + 1}: 使用 cover_url`);
+    } else if (item?.image_url) {
+      imageUrl = item.image_url;
+      logger.debug(`图片 ${index + 1}: 使用 image_url`);
+    } else if (item?.url) {
+      imageUrl = item.url;
+      logger.debug(`图片 ${index + 1}: 使用 url`);
+    } else {
+      logger.warn(`图片 ${index + 1}: 无法提取URL，item结构: ${JSON.stringify(item, null, 2)}`);
     }
 
-    // 如果状态是完成但图片数量为0，记录并继续等待
-    if (status === 10 && item_list.length === 0 && pollCount % 30 === 0) {
-      logger.info(`图生图状态已完成但无图片生成: 状态=${status}, 继续等待...`);
-    }
+    return imageUrl;
+  }).filter((url: string | null) => url !== null) as string[];
+
+  logger.info(`图生图结果: 成功生成 ${resultImageUrls.length} 张图片，总耗时 ${pollingResult.elapsedTime} 秒，最终状态: ${pollingResult.status}`);
+
+  if (resultImageUrls.length === 0 && item_list.length > 0) {
+    logger.error(`图生图异常: item_list有 ${item_list.length} 个项目，但无法提取任何图片URL`);
+    logger.error(`完整的item_list数据: ${JSON.stringify(item_list, null, 2)}`);
   }
 
-  if (pollCount >= maxPollCount) {
-    logger.warn(`图生图超时: 轮询了 ${pollCount} 次，当前状态: ${status}，已生成图片数: ${item_list.length}`);
-  }
-
-  if (status === 30) {
-    if (failCode === '2038')
-      throw new APIException(EX.API_CONTENT_FILTERED);
-    else
-      throw new APIException(EX.API_IMAGE_GENERATION_FAILED, `图生图失败，错误代码: ${failCode}`);
-  }
-
-  const resultImageUrls = item_list.map((item) => {
-    if(!item?.image?.large_images?.[0]?.image_url)
-      return item?.common_attr?.cover_url || null;
-    return item.image.large_images[0].image_url;
-  }).filter(url => url !== null);
-
-  logger.info(`图生图结果: 成功生成 ${resultImageUrls.length} 张图片`);
   return resultImageUrls;
 }
 

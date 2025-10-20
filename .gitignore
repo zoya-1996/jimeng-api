@@ -13,6 +13,9 @@ build/
 logs/
 *.log
 
+#images
+*.jpeg
+
 # Environment variables
 .env
 .env.local

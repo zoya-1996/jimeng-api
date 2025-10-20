@@ -1,3 +1,4 @@
+import fs from "fs";
 import _ from "lodash";
 
 import Request from "@/lib/request/Request.ts";
@@ -79,35 +80,68 @@ export default {
         throw new Error(`不支持的参数: ${foundUnsupported.join(', ')}。请使用 ratio 和 resolution 参数控制图像尺寸。`);
       }
 
-      request
-        .validate("body.model", v => _.isUndefined(v) || _.isString(v))
-        .validate("body.prompt", _.isString)
-        .validate("body.images", _.isArray)
-        .validate("body.negative_prompt", v => _.isUndefined(v) || _.isString(v))
-        .validate("body.ratio", v => _.isUndefined(v) || _.isString(v))
-        .validate("body.resolution", v => _.isUndefined(v) || _.isString(v))
-        .validate("body.sample_strength", v => _.isUndefined(v) || _.isFinite(v))
-        .validate("body.response_format", v => _.isUndefined(v) || _.isString(v))
-        .validate("headers.authorization", _.isString);
-
-      // 验证图片数组
-      const { images } = request.body;
-      if (!images || images.length === 0) {
-        throw new Error("至少需要提供1张输入图片");
+      // 根据请求类型（JSON或form-data）进行不同的验证
+      const contentType = request.headers['content-type'] || '';
+      const isMultiPart = contentType.startsWith('multipart/form-data');
+      
+      if (isMultiPart) {
+        // for multipart/form-data
+        request
+          .validate("body.model", v => _.isUndefined(v) || _.isString(v))
+          .validate("body.prompt", _.isString)
+          .validate("body.negative_prompt", v => _.isUndefined(v) || _.isString(v))
+          .validate("body.ratio", v => _.isUndefined(v) || _.isString(v))
+          .validate("body.resolution", v => _.isUndefined(v) || _.isString(v))
+          .validate("body.sample_strength", v => _.isUndefined(v) || _.isFinite(v))
+          .validate("body.response_format", v => _.isUndefined(v) || _.isString(v))
+          .validate("headers.authorization", _.isString);
+      } else {
+        // for application/json
+        request
+          .validate("body.model", v => _.isUndefined(v) || _.isString(v))
+          .validate("body.prompt", _.isString)
+          .validate("body.images", _.isArray)
+          .validate("body.negative_prompt", v => _.isUndefined(v) || _.isString(v))
+          .validate("body.ratio", v => _.isUndefined(v) || _.isString(v))
+          .validate("body.resolution", v => _.isUndefined(v) || _.isString(v))
+          .validate("body.sample_strength", v => _.isUndefined(v) || _.isFinite(v))
+          .validate("body.response_format", v => _.isUndefined(v) || _.isString(v))
+          .validate("headers.authorization", _.isString);
       }
-      if (images.length > 10) {
-        throw new Error("最多支持10张输入图片");
-      }
 
-      // 验证每个图片元素
-      images.forEach((image, index) => {
-        if (!_.isString(image) && !_.isObject(image)) {
-          throw new Error(`图片 ${index + 1} 格式不正确：应为URL字符串或包含url字段的对象`);
+      let images: (string | Buffer)[] = [];
+      if (isMultiPart) {
+        const files = request.files?.images;
+        if (!files) {
+          throw new Error("在form-data中缺少 'images' 字段");
         }
-        if (_.isObject(image) && !image.url) {
-          throw new Error(`图片 ${index + 1} 缺少url字段`);
+        const imageFiles = Array.isArray(files) ? files : [files];
+        if (imageFiles.length === 0) {
+          throw new Error("至少需要提供1张输入图片");
         }
-      });
+        if (imageFiles.length > 10) {
+          throw new Error("最多支持10张输入图片");
+        }
+        images = imageFiles.map(file => fs.readFileSync(file.filepath));
+      } else {
+        const bodyImages = request.body.images;
+        if (!bodyImages || bodyImages.length === 0) {
+          throw new Error("至少需要提供1张输入图片");
+        }
+        if (bodyImages.length > 10) {
+          throw new Error("最多支持10张输入图片");
+        }
+        // 验证每个图片元素
+        bodyImages.forEach((image: any, index: number) => {
+          if (!_.isString(image) && !_.isObject(image)) {
+            throw new Error(`图片 ${index + 1} 格式不正确：应为URL字符串或包含url字段的对象`);
+          }
+          if (_.isObject(image) && !image.url) {
+            throw new Error(`图片 ${index + 1} 缺少url字段`);
+          }
+        });
+        images = bodyImages.map((image: any) => _.isString(image) ? image : image.url);
+      }
 
       // refresh_token切分
       const tokens = tokenSplit(request.headers.authorization);
@@ -126,8 +160,7 @@ export default {
 
       // 解析尺寸
       const responseFormat = _.defaultTo(response_format, "url");
-      const imageUrls = images.map(image => _.isString(image) ? image : image.url);
-      const resultUrls = await generateImageComposition(model, prompt, imageUrls, {
+      const resultUrls = await generateImageComposition(model, prompt, images, {
         ratio,
         resolution,
         sampleStrength,
@@ -148,7 +181,7 @@ export default {
       return {
         created: util.unixTimestamp(),
         data,
-        input_images: imageUrls.length,
+        input_images: images.length,
         composition_type: "multi_image_synthesis",
       };
     },
