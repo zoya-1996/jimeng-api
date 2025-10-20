@@ -10,9 +10,9 @@ import { createParser } from "eventsource-parser";
 import logger from "@/lib/logger.ts";
 import util from "@/lib/util.ts";
 import { JimengErrorHandler, JimengErrorResponse } from "@/lib/error-handler.ts";
+import { BASE_URL_DREAMINA_US } from "@/api/consts/dreamina.ts";
 import { 
   BASE_URL_CN,
-  BASE_URL_US,
   BASE_URL_US_COMMERCE,
   DEFAULT_ASSISTANT_ID_CN,
   DEFAULT_ASSISTANT_ID_US,
@@ -99,7 +99,8 @@ export async function getCredit(refreshToken: string) {
     data: {},
     headers: {
       Referer: "https://jimeng.jianying.com/ai-tool/image/generate",
-    }
+    },
+    noDefaultParams: true
   });
   logger.info(`\n积分信息: \n赠送积分: ${gift_credit}, 购买积分: ${purchase_credit}, VIP积分: ${vip_credit}`);
   return {
@@ -137,11 +138,13 @@ export async function receiveCredit(refreshToken: string) {
  * @param params 请求参数
  * @param headers 请求头
  */
+import { BASE_URL_DREAMINA_US } from "@/api/consts/dreamina.ts";
+
 export async function request(
   method: string,
   uri: string,
   refreshToken: string,
-  options: AxiosRequestConfig = {}
+  options: AxiosRequestConfig & { noDefaultParams?: boolean } = {}
 ) {
   const isUS = refreshToken.toLowerCase().startsWith('us-');
   const token = await acquireToken(isUS ? refreshToken.substring(3) : refreshToken);
@@ -150,22 +153,28 @@ export async function request(
     `9e2c|${uri.slice(-7)}|${PLATFORM_CODE}|${VERSION_CODE}|${deviceTime}||11ac`
   );
 
-    let baseUrl: string;
+  let baseUrl: string;
+  let aid: string;
+  let region: string;
+
   if (isUS) {
     if (uri.startsWith("/commerce/")) {
       baseUrl = BASE_URL_US_COMMERCE;
     } else {
-      baseUrl = BASE_URL_US;
+      baseUrl = BASE_URL_DREAMINA_US;
     }
-  } else {
+    aid = DEFAULT_ASSISTANT_ID_US;
+    region = REGION_US;
+  } else { // 'jimeng' (CN)
     baseUrl = BASE_URL_CN;
+    aid = DEFAULT_ASSISTANT_ID_CN;
+    region = REGION_CN;
   }
-  const aid = isUS ? DEFAULT_ASSISTANT_ID_US : DEFAULT_ASSISTANT_ID_CN;
-  const region = isUS ? REGION_US : REGION_CN;
+
   const origin = new URL(baseUrl).origin;
 
   const fullUrl = `${baseUrl}${uri}`;
-  const requestParams = {
+  const requestParams = options.noDefaultParams ? (options.params || {}) : {
     aid: aid,
     device_platform: "web",
     region: region,

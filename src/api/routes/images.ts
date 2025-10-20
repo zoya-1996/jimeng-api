@@ -4,16 +4,13 @@ import _ from "lodash";
 import Request from "@/lib/request/Request.ts";
 import { generateImages, generateImageComposition } from "@/api/controllers/images.ts";
 import { tokenSplit } from "@/api/controllers/core.ts";
-import { RESOLUTION_OPTIONS } from "@/api/consts/common.ts";
 import util from "@/lib/util.ts";
-
 
 export default {
   prefix: "/v1/images",
 
   post: {
     "/generations": async (request: Request) => {
-      // 检查是否包含不支持的参数
       const unsupportedParams = ['size', 'width', 'height'];
       const bodyKeys = Object.keys(request.body);
       const foundUnsupported = unsupportedParams.filter(param => bodyKeys.includes(param));
@@ -31,9 +28,8 @@ export default {
         .validate("body.sample_strength", v => _.isUndefined(v) || _.isFinite(v))
         .validate("body.response_format", v => _.isUndefined(v) || _.isString(v))
         .validate("headers.authorization", _.isString);
-      // refresh_token切分
+
       const tokens = tokenSplit(request.headers.authorization);
-      // 随机挑选一个refresh_token
       const token = _.sample(tokens);
       const {
         model,
@@ -45,7 +41,6 @@ export default {
         response_format,
       } = request.body;
 
-      // 解析尺寸
       const responseFormat = _.defaultTo(response_format, "url");
       const imageUrls = await generateImages(model, prompt, {
         ratio,
@@ -69,9 +64,7 @@ export default {
       };
     },
     
-    // 新增图片合成路由
     "/compositions": async (request: Request) => {
-      // 检查是否包含不支持的参数
       const unsupportedParams = ['size', 'width', 'height'];
       const bodyKeys = Object.keys(request.body);
       const foundUnsupported = unsupportedParams.filter(param => bodyKeys.includes(param));
@@ -80,12 +73,10 @@ export default {
         throw new Error(`不支持的参数: ${foundUnsupported.join(', ')}。请使用 ratio 和 resolution 参数控制图像尺寸。`);
       }
 
-      // 根据请求类型（JSON或form-data）进行不同的验证
       const contentType = request.headers['content-type'] || '';
       const isMultiPart = contentType.startsWith('multipart/form-data');
       
       if (isMultiPart) {
-        // for multipart/form-data
         request
           .validate("body.model", v => _.isUndefined(v) || _.isString(v))
           .validate("body.prompt", _.isString)
@@ -96,7 +87,6 @@ export default {
           .validate("body.response_format", v => _.isUndefined(v) || _.isString(v))
           .validate("headers.authorization", _.isString);
       } else {
-        // for application/json
         request
           .validate("body.model", v => _.isUndefined(v) || _.isString(v))
           .validate("body.prompt", _.isString)
@@ -131,7 +121,6 @@ export default {
         if (bodyImages.length > 10) {
           throw new Error("最多支持10张输入图片");
         }
-        // 验证每个图片元素
         bodyImages.forEach((image: any, index: number) => {
           if (!_.isString(image) && !_.isObject(image)) {
             throw new Error(`图片 ${index + 1} 格式不正确：应为URL字符串或包含url字段的对象`);
@@ -143,9 +132,7 @@ export default {
         images = bodyImages.map((image: any) => _.isString(image) ? image : image.url);
       }
 
-      // refresh_token切分
       const tokens = tokenSplit(request.headers.authorization);
-      // 随机挑选一个refresh_token
       const token = _.sample(tokens);
       
       const {
@@ -158,7 +145,6 @@ export default {
         response_format,
       } = request.body;
 
-      // 解析尺寸
       const responseFormat = _.defaultTo(response_format, "url");
       const resultUrls = await generateImageComposition(model, prompt, images, {
         ratio,
