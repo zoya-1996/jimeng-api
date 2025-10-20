@@ -19,11 +19,17 @@ jobs:
     permissions:
       contents: read
       packages: write
-      # id-token: write # OIDC token, not needed for GHCR login
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set IMAGE_NAME to lowercase (GHCR requires lowercase)
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Set up QEMU (for multi-arch)
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -33,7 +39,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }} # Use the default GITHUB_TOKEN
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata for Docker
         id: meta
@@ -41,13 +47,19 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # 为所有版本标签生成 latest
-            type=raw,value=latest,enable={{starts_with(git_ref, 'refs/tags/v')}}
-            # 使用实际的标签名称
+            type=raw,value=latest,enable={{startsWith(github.ref, 'refs/tags/v')}}
             type=ref,event=tag
 
+      - name: Compute VERSION arg
+        id: version
+        run: |
+          V="${{ steps.meta.outputs.version }}"
+          if [ -z "$V" ]; then
+            V="${{ github.ref_name }}"
+          fi
+          echo "VALUE=$V" >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image
-        id: build-and-push
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -59,4 +71,4 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             VCS_REF=${{ github.sha }}
-            VERSION=${{ steps.meta.outputs.version }}
+            VERSION=${{ steps.version.outputs.VALUE }}
