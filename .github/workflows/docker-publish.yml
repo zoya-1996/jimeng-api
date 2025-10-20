@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     tags:
-      - 'v1.3.0'
+      - 'v*.*.*'
   release:
     types: [published]
 
@@ -41,16 +41,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # set latest tag for default branch
-            type=raw,value=latest,enable={{is_default_branch}}
-            # tag commits on branches
-            type=ref,event=branch
-            # tag semver
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            # tag sha
-            type=sha,format=short
+            # 为所有版本标签生成 latest
+            type=raw,value=latest,enable={{starts_with(git_ref, 'refs/tags/v')}}
+            # 使用实际的标签名称
+            type=ref,event=tag
 
       - name: Build and push Docker image
         id: build-and-push
