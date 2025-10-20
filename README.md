@@ -6,10 +6,10 @@
 
 ## ✨ 特性
 
-- 🎨 **AI图像生成**: 支持多种模型和分辨率（默认2K，支持4K）
-- 🖼️ **图生图合成**: 支持多图混合、风格转换、内容合成
+- 🎨 **AI图像生成**: 支持多种模型和分辨率（默认2K，支持4K，1K）
+- 🖼️ **图生图合成**: 支持本地图片或者图片URL
 - 🎬 **AI视频生成**: 支持文本到视频生成
-- 🌐 **国际站支持**: 新增对即梦国际站（dreamina）文生图API的支持，可能不稳定，有问题提issue
+- 🌐 **国际站支持**: 新增对即梦国际站（dreamina）文生图API的支持，有问题提issue
 - 💬 **聊天接口**: OpenAI生图格式兼容的API
 - 🔄 **智能轮询**: 自适应轮询机制，优化生成效率
 - 🛡️ **统一异常处理**: 完善的错误处理和重试机制
@@ -49,7 +49,8 @@ curl -X POST http://localhost:5100/v1/images/generations \
 
 ### sessionid获取
 - 国内站 (即梦)和国际站 (dreamina)获取sessionid的方法相同，见下图。
-> **注意**: 国内站和国际站api接口相同，但国际站的sessionid需要手动添加**us-**，比如`Bearer us-xxxxx`，才能访问国际站，否则默认国内站。
+> **注意1**: 国内站和国际站api接口相同，但国际站的sessionid需要手动添加**us-**，比如`Bearer us-xxxxx`，才能访问国际站，否则默认国内站。
+> **注意2**: 国际站仅支持*文生图*，图生图涉及到上传逻辑，等后续有空的时候再完善
 
 ![](https://github.com/iptag/jimeng-api/blob/main/get_sessionid.png)
 
@@ -150,7 +151,7 @@ debug: false
 
 - **如何使用**: 使用从国际站获取的 `sessionid` ，并且需要手动添加**us-**，比如`Bearer us-xxxxx`，才能访问国际站，否则默认国内站。
 
-### 图像生成
+### 文生图
 
 **POST** `/v1/images/generations`
 
@@ -221,7 +222,7 @@ curl -X POST http://localhost:5100/v1/images/generations \
 | | `2:3` | 3328×4992 |
 | | `21:9` | 6048×2592 |
 
-### 图生图 (图片合成)
+### 图生图
 
 **POST** `/v1/images/compositions`
 
@@ -246,7 +247,7 @@ curl -X POST http://localhost:5100/v1/images/generations \
 **使用示例**:
 
 ```bash
-# 单图风格转换 (2K分辨率)
+# 示例1: URL图片风格转换 (使用application/json)
 curl -X POST http://localhost:5100/v1/images/compositions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_SESSION_ID" \
@@ -259,26 +260,25 @@ curl -X POST http://localhost:5100/v1/images/compositions \
     "sample_strength": 0.7
   }'
 
-# 多图混合合成 (4K分辨率)
+# 示例2: 本地单文件上传 (使用multipart/form-data)
 curl -X POST http://localhost:5100/v1/images/compositions \
-  -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_SESSION_ID" \
-  -d '{
-    "model": "jimeng-4.0",
-    "prompt": "将这些图片融合成一幅梦幻的超现实主义作品",
-    "images": [
-      "https://example.com/landscape.jpg",
-      "https://example.com/portrait.jpg"
-    ],
-    "ratio": "4:3",
-    "resolution": "4k",
-    "negative_prompt": "模糊，低质量，变形"
-  }'
+  -F "prompt=一只可爱的猫，动漫风格" \
+  -F "model=jimeng-4.0" \
+  -F "ratio=1:1" \
+  -F "resolution=1k" \
+  -F "images=@/path/to/your/local/cat.jpg"
+
+# 示例3: 本地多文件上传 (使用multipart/form-data)
+curl -X POST http://localhost:5100/v1/images/compositions \
+  -H "Authorization: Bearer YOUR_SESSION_ID" \
+  -F "prompt=融合这两张图片" \
+  -F "model=jimeng-4.0" \
+  -F "images=@/path/to/your/image1.jpg" \
+  -F "images=@/path/to/your/image2.png"
 ```
 
-#### 📋 **响应格式**
-
-**成功响应** (response_format: "url"):
+**成功响应示例** (适用于以上所有示例):
 ```json
 {
   "created": 1703123456,
@@ -287,33 +287,8 @@ curl -X POST http://localhost:5100/v1/images/compositions \
       "url": "https://p3-sign.toutiaoimg.com/tos-cn-i-tb4s082cfz/abc123.webp"
     }
   ],
-  "input_images": 2,
+  "input_images": 1,
   "composition_type": "multi_image_synthesis"
-}
-```
-
-**成功响应** (response_format: "b64_json"):
-```json
-{
-  "created": 1703123456,
-  "data": [
-    {
-      "b64_json": "iVBORw0KGgoAAAANSUhEUgAA..."
-    }
-  ],
-  "input_images": 2,
-  "composition_type": "multi_image_synthesis"
-}
-```
-
-**错误响应**:
-```json
-{
-  "error": {
-    "message": "图片上传失败: 网络连接超时",
-    "type": "image_upload_error",
-    "code": "UPLOAD_TIMEOUT"
-  }
 }
 ```
 
@@ -336,7 +311,7 @@ A:
 A: 支持 JPG、PNG、WebP、GIF 等常见格式，推荐使用 JPG 或 PNG。
 
 **Q: 可以使用本地图片吗？**
-A: 需要先将本地图片上传到可访问的网络地址，然后使用该URL。
+A: 可以。现在支持直接上传本地文件。请参考上方的“本地文件上传示例”。您也可以继续使用原有的网络图片URL方式。
 
 ### 视频生成
 
