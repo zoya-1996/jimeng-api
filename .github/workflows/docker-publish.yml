@@ -1,21 +1,18 @@
 name: Docker Publish
 
 on:
-  # 打 tag 触发：仅用于预热缓存，不推镜像
   push:
-    tags: ['v*.*.*']
-  # 发布 Release 触发：才推 latest + vX.Y.Z
+    tags:
+      - 'v*.*.*'
   release:
     types: [published]
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }} # 将在步骤中强制转小写
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # 1) Tag push：构建但不推送（预热缓存）
-  build-cache-on-tag:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+  build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -36,66 +33,34 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 仅构建用于缓存，不需要生成任何 tag
-      - name: Build (no push, warm cache)
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # 2) Release published：推送 latest + vX.Y.Z（同一构建 -> 同 digest）
-  build-and-push-on-release:
-    if: github.event_name == 'release' && github.event.action == 'published'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Force IMAGE_NAME lowercase (GHCR requires lowercase)
-        run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
-
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # 注意：tags: 的多行字符串中不要写注释行（#）
-      - name: Docker metadata (latest only on Release)
+      - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
+            # 仅在发布 Release 时生成 latest
             type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
+            # 语义化版本标签
             type=semver,pattern={{version}},enable={{is_semver}}
             type=semver,pattern={{major}}.{{minor}},enable={{is_semver}}
             type=semver,pattern={{major}},enable={{is_semver}}
+            # 实际的标签名（仅在 tag 事件）
+            type=ref,event=tag
 
       - name: Compute VERSION
         id: version
         run: |
-          # 优先使用 metadata-action 的 version（在 semver tag 上可用）
           V="${{ steps.meta.outputs.version }}"
-          # 退回 Release 的 tag_name
-          if [ -z "$V" ]; then V="${{ github.event.release.tag_name }}"; fi
+          if [ -z "$V" ]; then V="${{ github.ref_name }}"; fi
           echo "VALUE=$V" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push (Release)
+      - name: Build and (conditionally) push
         uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}  # 仅在打 tag 时推
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
