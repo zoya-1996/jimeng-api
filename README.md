@@ -68,7 +68,7 @@ docker run -d \
   --name jimeng-api \
   -p 5100:5100 \
   --restart unless-stopped \
-  iptag/jimeng:latest
+  ghcr.io/iptag/jimeng-api:latest
 ```
 
 #### 方式二：直接运行
