@@ -74,6 +74,16 @@ export const POLLING_CONFIG = {
 
 // 支持的图片比例和分辨率
 export const RESOLUTION_OPTIONS = {
+  "1k":{
+    "1:1": { width: 1328, height: 1328, ratio: 1 },
+    "4:3": { width: 1472, height: 1104, ratio: 4 },
+    "3:4": { width: 1104, height: 1472, ratio: 2 },
+    "16:9": { width: 1664, height: 936, ratio: 3 },
+    "9:16": { width: 936, height: 1664, ratio: 5 },
+    "3:2": { width: 1584, height: 1056, ratio: 7 },
+    "2:3": { width: 1056, height: 1584, ratio: 6 },
+    "21:9": { width: 2016, height: 864, ratio: 8 },
+  },
   "2k": {
     "1:1": {width: 2048, height: 2048, ratio: 1},
     "4:3": {width: 2304, height: 1728, ratio: 4},

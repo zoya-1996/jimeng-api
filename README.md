@@ -41,7 +41,7 @@ curl -X POST http://localhost:5100/v1/images/generations \
   }'
 ```
 
-**支持的resolution**: `2k`, `4k`
+**支持的resolution**: `1k`, `2k`, `4k`
 
 **支持的ratio**: `1:1`, `4:3`, `3:4`, `16:9`, `9:16`, `3:2`, `2:3`, `21:9`
 
@@ -158,7 +158,7 @@ debug: false
 - `model` (string): 使用的模型名称
 - `prompt` (string): 图像描述文本
 - `ratio` (string, 可选): 图像比例，默认为 `"1:1"`。支持的比例: `1:1`, `4:3`, `3:4`, `16:9`, `9:16`, `3:2`, `2:3`, `21:9`。
-- `resolution` (string, 可选): 分辨率级别，默认为 `"2k"`。支持的分辨率: `2k`, `4k`。
+- `resolution` (string, 可选): 分辨率级别，默认为 `"2k"`。支持的分辨率: `1k`, `2k`, `4k`。
 - `negative_prompt` (string, 可选): 负面提示词
 - `sample_strength` (number, 可选): 采样强度 (0.0-1.0)
 - `response_format` (string, 可选): 响应格式 ("url" 或 "b64_json")
@@ -187,7 +187,7 @@ curl -X POST http://localhost:5100/v1/images/generations \
 
 **支持的模型**:
 - `jimeng-4.0`
-- `jimeng-3.1` 调用4.0以下模型时须有官网购买的积分，每日赠送的不行，不然会提示积分不够
+- `jimeng-3.1`
 - `jimeng-3.0`
 - `jimeng-2.1`
 - `jimeng-xl-pro`
@@ -196,6 +196,14 @@ curl -X POST http://localhost:5100/v1/images/generations \
 **支持的比例及对应分辨率** ：
 | resolution | ratio | 分辨率 |
 |---|---|---|
+| `1k` | `1:1` | 1328×1328 |
+| | `4:3` | 1472×1104 |
+| | `3:4` | 1104×1472 |
+| | `16:9` | 1664×936 |
+| | `9:16` | 936×1664 |
+| | `3:2` | 1584×1056 |
+| | `2:3` | 1056×1584 |
+| | `21:9` | 2016×864 |
 | `2k` (默认) | `1:1` | 2048×2048 |
 | | `4:3` | 2304×1728 |
 | | `3:4` | 1728×2304 |
@@ -224,7 +232,7 @@ curl -X POST http://localhost:5100/v1/images/generations \
 - `prompt` (string): 图像描述文本，用于指导生成方向
 - `images` (array): 输入图片数组
 - `ratio` (string, 可选): 图像比例，默认为 `"1:1"`。支持的比例: `1:1`, `4:3`, `3:4`, `16:9`, `9:16`, `3:2`, `2:3`, `21:9`。
-- `resolution` (string, 可选): 分辨率级别，默认为 `"2k"`。支持的分辨率: `2k`, `4k`。
+- `resolution` (string, 可选): 分辨率级别，默认为 `"2k"`。支持的分辨率: `1k`, `2k`, `4k`。
 - `negative_prompt` (string, 可选): 负面提示词
 - `sample_strength` (number, 可选): 采样强度 (0.0-1.0)
 - `response_format` (string, 可选): 响应格式 ("url" 或 "b64_json")

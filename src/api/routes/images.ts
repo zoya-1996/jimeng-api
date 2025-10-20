@@ -126,6 +126,7 @@ export default {
 
       // 解析尺寸
       const responseFormat = _.defaultTo(response_format, "url");
+      const imageUrls = images.map(image => _.isString(image) ? image : image.url);
       const resultUrls = await generateImageComposition(model, prompt, imageUrls, {
         ratio,
         resolution,
