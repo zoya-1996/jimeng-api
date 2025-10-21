@@ -65,14 +65,23 @@ curl -X POST http://localhost:5100/v1/images/generations \
 
 ### 安装部署
 
-#### 方式一：直接拉取docker镜像
+#### 方式一：docker镜像拉取和更新
 
+**拉取命令**
 ```bash
 docker run -d \
   --name jimeng-api \
   -p 5100:5100 \
   --restart unless-stopped \
   ghcr.io/iptag/jimeng-api:latest
+```
+
+**更新命令**
+```bash
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  containrrr/watchtower \
+  --run-once jimeng-api
 ```
 
 #### 方式二：直接运行
