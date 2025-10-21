@@ -184,10 +184,11 @@ curl -X POST http://localhost:5100/v1/images/generations \
 ```
 
 **支持的模型**:
-- `jimeng-4.0`
-- `jimeng-3.1`
-- `jimeng-3.0`
-- `jimeng-2.1`
+- `nanobanana`: 仅国际站支持
+- `jimeng-4.0`: 国内、国际站均支持
+- `jimeng-3.1`: 仅国内站支持
+- `jimeng-3.0`: 国内、国际站均支持
+- `jimeng-2.1`: 仅国内站支持
 - `jimeng-xl-pro`
 
 
