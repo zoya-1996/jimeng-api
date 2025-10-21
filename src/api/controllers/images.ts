@@ -7,8 +7,8 @@ import util from "@/lib/util.ts";
 import { getCredit, receiveCredit, request } from "./core.ts";
 import logger from "@/lib/logger.ts";
 import { SmartPoller, PollingStatus } from "@/lib/smart-poller.ts";
-import { DEFAULT_IMAGE_MODEL, DRAFT_VERSION, IMAGE_MODEL_MAP, RESOLUTION_OPTIONS } from "@/api/consts/common.ts";
-import { BASE_URL_DREAMINA_US, BASE_URL_IMAGEX_US, AID_DREAMINA, WEB_VERSION as DREAMINA_WEB_VERSION, DA_VERSION as DREAMINA_DA_VERSION, AIGC_FEATURES as DREAMINA_AIGC_FEATURES } from "@/api/consts/dreamina.ts";
+import { DEFAULT_ASSISTANT_ID_CN, DEFAULT_ASSISTANT_ID_US, DEFAULT_IMAGE_MODEL, DRAFT_VERSION, DRAFT_MIN_VERSION, IMAGE_MODEL_MAP, IMAGE_MODEL_MAP_US, RESOLUTION_OPTIONS } from "@/api/consts/common.ts";
+import { BASE_URL_DREAMINA_US, BASE_URL_IMAGEX_US, WEB_VERSION as DREAMINA_WEB_VERSION, DA_VERSION as DREAMINA_DA_VERSION, AIGC_FEATURES as DREAMINA_AIGC_FEATURES } from "@/api/consts/dreamina.ts";
 import { createSignature } from "@/lib/aws-signature.ts";
 
 export const DEFAULT_MODEL = DEFAULT_IMAGE_MODEL;
@@ -33,8 +33,13 @@ function getResolutionParams(resolution: string = '2k', ratio: string = '1:1'): 
     resolution_type: resolution,
   };
 }
-export function getModel(model: string) {
-  return IMAGE_MODEL_MAP[model] || IMAGE_MODEL_MAP[DEFAULT_MODEL];
+export function getModel(model: string, isUS: boolean) {
+  const modelMap = isUS ? IMAGE_MODEL_MAP_US : IMAGE_MODEL_MAP;
+  if (isUS && !modelMap[model]) {
+    const supportedModels = Object.keys(modelMap).join(', ');
+    throw new Error(`国际版不支持模型 "${model}"。支持的模型: ${supportedModels}`);
+  }
+  return modelMap[model] || modelMap[DEFAULT_MODEL];
 }
 
 function calculateCRC32(buffer: ArrayBuffer): string {
@@ -82,13 +87,14 @@ async function uploadImageFromBuffer(imageBuffer: Buffer, refreshToken: string, 
         scene: 2,
       },
       params: isUS ? {
-        aid: AID_DREAMINA,
+        aid: DEFAULT_ASSISTANT_ID_US,
         web_version: DREAMINA_WEB_VERSION,
         da_version: DREAMINA_DA_VERSION,
         aigc_features: DREAMINA_AIGC_FEATURES,
-      } : {},
+      } : {
+        aid: DEFAULT_ASSISTANT_ID_CN.toString(),
+      },
     });
-
     const { access_key_id, secret_access_key, session_token } = tokenResult;
     const service_id = isUS ? tokenResult.space_name : tokenResult.service_id;
 
@@ -241,8 +247,24 @@ export async function generateImageComposition(
   refreshToken: string
 ) {
   const isUS = refreshToken.toLowerCase().startsWith('us-');
-  const model = getModel(_model);
-  const { width, height, image_ratio, resolution_type } = getResolutionParams(resolution, ratio);
+  const model = getModel(_model, isUS);
+  
+  let width, height, image_ratio, resolution_type;
+
+  if (_model === 'nanobanana') {
+    logger.warn('nanobanana模型当前固定使用1024x1024分辨率和2k的清晰度，您输入的参数将被忽略。');
+    width = 1024;
+    height = 1024;
+    image_ratio = 1;
+    resolution_type = '2k';
+  } else {
+    const params = getResolutionParams(resolution, ratio);
+    width = params.width;
+    height = params.height;
+    image_ratio = params.image_ratio;
+    resolution_type = params.resolution_type;
+  }
+
   const imageCount = images.length;
   logger.info(`使用模型: ${_model} 映射模型: ${model} 图生图功能 ${imageCount}张图片 ${width}x${height} 精细度: ${sampleStrength}`);
 
@@ -278,20 +300,30 @@ export async function generateImageComposition(
 
   const componentId = util.uuid();
   const submitId = util.uuid();
+  
+  const core_param = {
+    type: "",
+    id: util.uuid(),
+    model,
+    prompt: `##${prompt}`,
+    sample_strength: sampleStrength,
+    image_ratio: image_ratio,
+    large_image_info: {
+      type: "",
+      id: util.uuid(),
+      height: height,
+      width: width,
+      resolution_type: resolution_type
+    },
+    intelligent_ratio: false,
+  };
+
   const { aigc_data } = await request(
     "post",
     "/mweb/v1/aigc_draft/generate",
     refreshToken,
     {
       params: {
-        babi_param: encodeURIComponent(
-          JSON.stringify({
-            scenario: "image_video_generation",
-            feature_key: "aigc_to_image",
-            feature_entrance: "to_image",
-            feature_entrance_detail: "to_image-" + model,
-          })
-        ),
       },
       data: {
         extend: {
@@ -308,16 +340,16 @@ export async function generateImageComposition(
         draft_content: JSON.stringify({
           type: "draft",
           id: util.uuid(),
-          min_version: "3.0.2",
+          min_version: DRAFT_MIN_VERSION,
           min_features: [],
           is_from_tsn: true,
-          version: "3.3.2",
+          version: DRAFT_VERSION,
           main_component_id: componentId,
           component_list: [
             {
               type: "image_base_component",
               id: componentId,
-              min_version: "3.0.2",
+              min_version: DRAFT_MIN_VERSION,
               aigc_mode: "workbench",
               metadata: {
                 type: "",
@@ -334,24 +366,8 @@ export async function generateImageComposition(
                 blend: {
                   type: "",
                   id: util.uuid(),
-                  min_version: "3.3.2",
                   min_features: [],
-                  core_param: {
-                    type: "",
-                    id: util.uuid(),
-                    model,
-                    prompt: `####${prompt}`,
-                    sample_strength: sampleStrength,
-                    image_ratio: image_ratio,
-                    large_image_info: {
-                      type: "",
-                      id: util.uuid(),
-                      height: height,
-                      width: width,
-                      resolution_type: resolution_type
-                    },
-                    intelligent_ratio: false,
-                  },
+                  core_param: core_param,
                   ability_list: uploadedImageIds.map((imageId) => ({
                     type: "",
                     id: util.uuid(),
@@ -386,6 +402,9 @@ export async function generateImageComposition(
             },
           ],
         }),
+        http_common_info: {
+          aid: isUS ? DEFAULT_ASSISTANT_ID_US : DEFAULT_ASSISTANT_ID_CN
+        }
       },
     }
   );
@@ -501,7 +520,8 @@ export async function generateImages(
   },
   refreshToken: string
 ) {
-  const model = getModel(_model);
+  const isUS = refreshToken.toLowerCase().startsWith('us-');
+  const model = getModel(_model, isUS);
   logger.info(`使用模型: ${_model} 映射模型: ${model} 分辨率: ${resolution} 比例: ${ratio} 精细度: ${sampleStrength}`);
 
   return await generateImagesInternal(_model, prompt, { ratio, resolution, sampleStrength, negativePrompt }, refreshToken);
@@ -523,8 +543,24 @@ async function generateImagesInternal(
   },
   refreshToken: string
 ) {
-  const model = getModel(_model);
-  const { width, height, image_ratio, resolution_type } = getResolutionParams(resolution, ratio);
+  const isUS = refreshToken.toLowerCase().startsWith('us-');
+  const model = getModel(_model, isUS);
+  
+  let width, height, image_ratio, resolution_type;
+
+  if (_model === 'nanobanana') {
+    logger.warn('nanobanana模型当前固定使用1024x1024分辨率和2k的清晰度，您输入的参数将被忽略。');
+    width = 1024;
+    height = 1024;
+    image_ratio = 1;
+    resolution_type = '2k';
+  } else {
+    const params = getResolutionParams(resolution, ratio);
+    width = params.width;
+    height = params.height;
+    image_ratio = params.image_ratio;
+    resolution_type = params.resolution_type;
+  }
 
   const { totalCredit, giftCredit, purchaseCredit, vipCredit } = await getCredit(refreshToken);
   if (totalCredit <= 0)
@@ -544,25 +580,36 @@ async function generateImagesInternal(
   }
 
   const componentId = util.uuid();
+  
+  const core_param = {
+    type: "",
+    id: util.uuid(),
+    model,
+    prompt,
+    negative_prompt: negativePrompt,
+    seed: Math.floor(Math.random() * 100000000) + 2500000000,
+    sample_strength: sampleStrength,
+    image_ratio: image_ratio,
+    large_image_info: {
+      type: "",
+      id: util.uuid(),
+      height: height,
+      width: width,
+      resolution_type: resolution_type
+    },
+    intelligent_ratio: false
+  };
+
   const { aigc_data } = await request(
     "post",
     "/mweb/v1/aigc_draft/generate",
     refreshToken,
     {
       params: {
-        babi_param: encodeURIComponent(
-          JSON.stringify({
-            scenario: "image_video_generation",
-            feature_key: "aigc_to_image",
-            feature_entrance: "to_image",
-            feature_entrance_detail: "to_image-" + model,
-          })
-        ),
       },
       data: {
         extend: {
           root_model: model,
-          template_id: "",
         },
         submit_id: util.uuid(),
         metrics_extra: JSON.stringify({
@@ -601,33 +648,15 @@ async function generateImagesInternal(
                 generate: {
                   type: "",
                   id: util.uuid(),
-                  core_param: {
-                    type: "",
-                    id: util.uuid(),
-                    model,
-                    prompt,
-                    negative_prompt: negativePrompt,
-                    seed: Math.floor(Math.random() * 100000000) + 2500000000,
-                    sample_strength: sampleStrength,
-                    image_ratio: image_ratio,
-                    large_image_info: {
-                      type: "",
-                      id: util.uuid(),
-                      height: height,
-                      width: width,
-                      resolution_type: resolution_type
-                    },
-                    intelligent_ratio: false
-                  },
-                  history_option: {
-                    type: "",
-                    id: util.uuid(),
-                  },
+                  core_param: core_param,
                 },
               },
             },
           ],
         }),
+        http_common_info: {
+          aid: isUS ? DEFAULT_ASSISTANT_ID_US : DEFAULT_ASSISTANT_ID_CN
+        }
       },
     }
   );
@@ -745,7 +774,8 @@ async function generateJimeng40MultiImages(
   },
   refreshToken: string
 ) {
-  const model = getModel(_model);
+  const isUS = refreshToken.toLowerCase().startsWith('us-');
+  const model = getModel(_model, isUS);
   const { width, height, image_ratio, resolution_type } = getResolutionParams(resolution, ratio);
 
   const targetImageCount = prompt.match(/(\d+)张/) ? parseInt(prompt.match(/(\d+)张/)[1]) : 4;
@@ -761,19 +791,10 @@ async function generateJimeng40MultiImages(
     refreshToken,
     {
       params: {
-        babi_param: encodeURIComponent(
-          JSON.stringify({
-            scenario: "image_video_generation",
-            feature_key: "aigc_to_image",
-            feature_entrance: "to_image",
-            feature_entrance_detail: "to_image-" + model,
-          })
-        ),
       },
       data: {
         extend: {
           root_model: model,
-          template_id: "",
         },
         submit_id: submitId,
         metrics_extra: JSON.stringify({
@@ -787,7 +808,7 @@ async function generateJimeng40MultiImages(
         draft_content: JSON.stringify({
           type: "draft",
           id: util.uuid(),
-          min_version: DRAFT_VERSION,
+          min_version: DRAFT_MIN_VERSION,
           min_features: [],
           is_from_tsn: true,
           version: DRAFT_VERSION,
@@ -796,7 +817,7 @@ async function generateJimeng40MultiImages(
             {
               type: "image_base_component",
               id: componentId,
-              min_version: DRAFT_VERSION,
+              min_version: DRAFT_MIN_VERSION,
               aigc_mode: "workbench",
               metadata: {
                 type: "",
@@ -831,15 +852,14 @@ async function generateJimeng40MultiImages(
                     },
                     intelligent_ratio: false
                   },
-                  history_option: {
-                    type: "",
-                    id: util.uuid(),
-                  },
                 },
               },
             },
           ],
         }),
+        http_common_info: {
+          aid: isUS ? DEFAULT_ASSISTANT_ID_US : DEFAULT_ASSISTANT_ID_CN
+        }
       },
     }
   );

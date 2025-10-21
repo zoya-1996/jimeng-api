@@ -51,7 +51,9 @@ curl -X POST http://localhost:5100/v1/images/generations \
 - 国内站 (即梦)和国际站 (dreamina)获取sessionid的方法相同，见下图。
 > **注意1**: 国内站和国际站api接口相同，但国际站的sessionid需要手动添加**us-**，比如`Bearer us-xxxxx`，才能访问国际站，否则默认国内站。
 >
-> **注意2**: 国内站和国际站现已同时支持*文生图*和*图生图*。
+> **注意2**: 国内站和国际站现已同时支持*文生图*和*图生图*，国际站添加nanobanana模型。
+>
+> **注意3**: 国际站使用nanobanana模型时，生成的图像都将固定为 **1024x1024** 和 **2k**，与官方保持一致。
 
 ![](https://github.com/iptag/jimeng-api/blob/main/get_sessionid.png)
 

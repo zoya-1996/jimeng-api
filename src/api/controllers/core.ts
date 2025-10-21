@@ -42,8 +42,7 @@ const FAKE_HEADERS = {
   Pragma: "no-cache",
   Priority: "u=1, i",
   Pf: PLATFORM_CODE,
-  "Sec-Ch-Ua":
-    '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+  "Sec-Ch-Ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
   "Sec-Ch-Ua-Mobile": "?0",
   "Sec-Ch-Ua-Platform": '"Windows"',
   "Sec-Fetch-Dest": "empty",
@@ -178,7 +177,7 @@ export async function request(
     aid: aid,
     device_platform: "web",
     region: region,
-    webId: WEB_ID,
+    ...(isUS ? {} : { webId: WEB_ID }),
     da_version: "3.3.2",
     web_component_open_flag: 1,
     web_version: "7.5.0",
