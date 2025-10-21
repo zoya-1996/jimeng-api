@@ -622,7 +622,7 @@ async function generateImagesInternal(
         draft_content: JSON.stringify({
           type: "draft",
           id: util.uuid(),
-          min_version: DRAFT_VERSION,
+          min_version: DRAFT_MIN_VERSION,
           min_features: [],
           is_from_tsn: true,
           version: DRAFT_VERSION,
@@ -631,7 +631,7 @@ async function generateImagesInternal(
             {
               type: "image_base_component",
               id: componentId,
-              min_version: DRAFT_VERSION,
+              min_version: DRAFT_MIN_VERSION,
               aigc_mode: "workbench",
               metadata: {
                 type: "",
