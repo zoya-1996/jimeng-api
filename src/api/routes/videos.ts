@@ -51,7 +51,8 @@ export default {
                     width,
                     height,
                     resolution,
-                    filePaths: finalFilePaths
+                    filePaths: finalFilePaths,
+                    files: request.files, // 传递上传的文件
                 },
                 token
             );
