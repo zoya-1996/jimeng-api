@@ -74,7 +74,7 @@ export const RETRY_CONFIG = {
 // 轮询配置
 export const POLLING_CONFIG = {
   MAX_POLL_COUNT: 900, // 15分钟
-  POLL_INTERVAL: 1000, // 1秒
+  POLL_INTERVAL: 5000, // 1秒
   STABLE_ROUNDS: 5,    // 稳定轮次
   TIMEOUT_SECONDS: 900 // 15分钟超时
 };
