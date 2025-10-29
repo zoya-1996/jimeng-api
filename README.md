@@ -1,6 +1,6 @@
 # Jimeng API
 
-[中文文档](README.CN.md).
+[中文文档](README.CN.md)
 
 🎨 **Free AI Image and Video Generation API Service** - Based on reverse engineering of Jimeng AI (China site) and Dreamina (international site), providing an interface format compatible with the OpenAI API.
 
