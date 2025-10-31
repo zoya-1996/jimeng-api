@@ -112,7 +112,11 @@ class Server {
         this.app.use(async (ctx: any, next: Function) => {
             if (!ctx._jsonProcessed) {
                 await koaBody(Object.assign(_.clone(config.system.requestBody), {
-                    enableTypes: ['form', 'text', 'xml']
+                    multipart: true, // 开启multipart文件上传
+                    formidable: {
+                        maxFileSize: 10 * 1024 * 1024, // 限制最大10MB
+                    },
+                    enableTypes: ['json', 'form', 'text', 'xml'] // 确保form类型被启用
                 }))(ctx, next);
             } else {
                 await next();
@@ -143,8 +147,13 @@ class Server {
                 for (let uri in route[method]) {
                     this.router[method](`${prefix}${uri}`, async ctx => {
                         const { request, response } = await this.#requestProcessing(ctx, route[method][uri]);
-                        if(response != null && config.system.requestLog)
-                            logger.info(`<- ${request.method} ${request.url} ${response.time - request.time}ms`);
+                        if(response != null && config.system.requestLog) {
+                            if (ctx.request.url.endsWith('/ping')) {
+                                logger.debug(`<- ${request.method} ${request.url} ${response.time - request.time}ms`);
+                            } else {
+                                logger.info(`<- ${request.method} ${request.url} ${response.time - request.time}ms`);
+                            }
+                        }
                     });
                 }
             }
@@ -176,8 +185,13 @@ class Server {
         return new Promise(resolve => {
             const request = new Request(ctx);
             try {
-                if(config.system.requestLog)
-                    logger.info(`-> ${request.method} ${request.url}`);
+                if(config.system.requestLog) {
+                    if (request.url === '/ping') {
+                        logger.debug(`-> ${request.method} ${request.url}`);
+                    } else {
+                        logger.info(`-> ${request.method} ${request.url}`);
+                    }
+                }
                     routeFn(request)
                 .then(response => {
                     try {

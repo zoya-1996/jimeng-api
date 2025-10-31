@@ -1,5 +1,6 @@
 import _ from "lodash";
 import crypto from "crypto";
+import fs from "fs-extra";
 
 import APIException from "@/lib/exceptions/APIException.ts";
 import EX from "@/api/consts/exceptions.ts";
@@ -7,7 +8,7 @@ import util from "@/lib/util.ts";
 import { getCredit, receiveCredit, request } from "./core.ts";
 import logger from "@/lib/logger.ts";
 import { SmartPoller, PollingStatus } from "@/lib/smart-poller.ts";
-import { DEFAULT_ASSISTANT_ID, DEFAULT_VIDEO_MODEL, DRAFT_VERSION, VIDEO_MODEL_MAP } from "@/api/consts/common.ts";
+import { DEFAULT_ASSISTANT_ID_CN, DEFAULT_VIDEO_MODEL, DRAFT_VERSION, VIDEO_MODEL_MAP } from "@/api/consts/common.ts";
 
 export const DEFAULT_MODEL = DEFAULT_VIDEO_MODEL;
 
@@ -125,11 +126,8 @@ function calculateCRC32(buffer: ArrayBuffer): string {
   return ((crc ^ (-1)) >>> 0).toString(16).padStart(8, '0');
 }
 
-// 视频专用图片上传功能（基于 images.ts 的 uploadImageFromUrl）
-async function uploadImageForVideo(imageUrl: string, refreshToken: string): Promise<string> {
-  try {
-    logger.info(`开始上传视频图片: ${imageUrl}`);
-    
+// 核心上传逻辑：上传二进制buffer到ImageX
+async function _uploadImageBuffer(imageBuffer: ArrayBuffer, refreshToken: string): Promise<string> {
     // 第一步：获取上传令牌
     const tokenResult = await request("post", "/mweb/v1/get_upload_token", refreshToken, {
       data: {
@@ -145,17 +143,10 @@ async function uploadImageForVideo(imageUrl: string, refreshToken: string): Prom
     const actualServiceId = service_id || "tb4s082cfz";
     logger.info(`获取上传令牌成功: service_id=${actualServiceId}`);
     
-    // 下载图片数据
-    const imageResponse = await fetch(imageUrl);
-    if (!imageResponse.ok) {
-      throw new Error(`下载图片失败: ${imageResponse.status}`);
-    }
-    
-    const imageBuffer = await imageResponse.arrayBuffer();
     const fileSize = imageBuffer.byteLength;
     const crc32 = calculateCRC32(imageBuffer);
     
-    logger.info(`图片下载完成: 大小=${fileSize}字节, CRC32=${crc32}`);
+    logger.info(`图片Buffer准备完成: 大小=${fileSize}字节, CRC32=${crc32}`);
     
     // 第二步：申请图片上传权限
     const now = new Date();
@@ -323,12 +314,36 @@ async function uploadImageForVideo(imageUrl: string, refreshToken: string): Prom
     
     logger.info(`视频图片上传完成: ${fullImageUri}`);
     return fullImageUri;
-    
+}
+
+// 处理来自URL的图片
+async function uploadImageFromUrl(imageUrl: string, refreshToken: string): Promise<string> {
+  try {
+    logger.info(`开始从URL下载并上传视频图片: ${imageUrl}`);
+    const imageResponse = await fetch(imageUrl);
+    if (!imageResponse.ok) {
+      throw new Error(`下载图片失败: ${imageResponse.status}`);
+    }
+    const imageBuffer = await imageResponse.arrayBuffer();
+    return await _uploadImageBuffer(imageBuffer, refreshToken);
   } catch (error) {
-    logger.error(`视频图片上传失败: ${error.message}`);
+    logger.error(`从URL上传视频图片失败: ${error.message}`);
     throw error;
   }
 }
+
+// 处理本地上传的文件
+async function uploadImageFromFile(file: any, refreshToken: string): Promise<string> {
+  try {
+    logger.info(`开始从本地文件上传视频图片: ${file.originalFilename} (路径: ${file.filepath})`);
+    const imageBuffer = await fs.readFile(file.filepath);
+    return await _uploadImageBuffer(imageBuffer, refreshToken);
+  } catch (error) {
+    logger.error(`从本地文件上传视频图片失败: ${error.message}`);
+    throw error;
+  }
+}
+
 
 /**
  * 生成视频
@@ -347,11 +362,13 @@ export async function generateVideo(
     height = 1024,
     resolution = "720p",
     filePaths = [],
+    files = {},
   }: {
     width?: number;
     height?: number;
     resolution?: string;
     filePaths?: string[];
+    files?: any;
   },
   refreshToken: string
 ) {
@@ -366,51 +383,64 @@ export async function generateVideo(
   // 处理首帧和尾帧图片
   let first_frame_image = undefined;
   let end_frame_image = undefined;
-  
-  if (filePaths && filePaths.length > 0) {
-    let uploadIDs: string[] = [];
-    logger.info(`开始上传 ${filePaths.length} 张图片用于视频生成`);
-    
+  let uploadIDs: string[] = [];
+
+  // 优先处理本地上传的文件
+  const uploadedFiles = _.values(files); // 将files对象转为数组
+  if (uploadedFiles && uploadedFiles.length > 0) {
+    logger.info(`检测到 ${uploadedFiles.length} 个本地上传文件，优先处理`);
+    for (let i = 0; i < uploadedFiles.length; i++) {
+      const file = uploadedFiles[i];
+      if (!file) continue;
+      try {
+        logger.info(`开始上传第 ${i + 1} 张本地图片: ${file.originalFilename}`);
+        const imageUri = await uploadImageFromFile(file, refreshToken);
+        if (imageUri) {
+          uploadIDs.push(imageUri);
+          logger.info(`第 ${i + 1} 张本地图片上传成功: ${imageUri}`);
+        } else {
+          logger.error(`第 ${i + 1} 张本地图片上传失败: 未获取到 image_uri`);
+        }
+      } catch (error) {
+        logger.error(`第 ${i + 1} 张本地图片上传失败: ${error.message}`);
+        if (i === 0) {
+          throw new APIException(EX.API_REQUEST_FAILED, `首帧图片上传失败: ${error.message}`);
+        }
+      }
+    }
+  }
+  // 如果没有本地文件，再处理URL
+  else if (filePaths && filePaths.length > 0) {
+    logger.info(`未检测到本地上传文件，处理 ${filePaths.length} 个图片URL`);
     for (let i = 0; i < filePaths.length; i++) {
       const filePath = filePaths[i];
       if (!filePath) {
-        logger.warn(`第 ${i + 1} 张图片路径为空，跳过`);
+        logger.warn(`第 ${i + 1} 个图片URL为空，跳过`);
         continue;
       }
-      
       try {
-        logger.info(`开始上传第 ${i + 1} 张图片: ${filePath}`);
-        
-        // 使用Amazon S3上传方式
-        const imageUri = await uploadImageForVideo(filePath, refreshToken);
-        
+        logger.info(`开始上传第 ${i + 1} 个URL图片: ${filePath}`);
+        const imageUri = await uploadImageFromUrl(filePath, refreshToken);
         if (imageUri) {
           uploadIDs.push(imageUri);
-          logger.info(`第 ${i + 1} 张图片上传成功: ${imageUri}`);
+          logger.info(`第 ${i + 1} 个URL图片上传成功: ${imageUri}`);
         } else {
-          logger.error(`第 ${i + 1} 张图片上传失败: 未获取到 image_uri`);
+          logger.error(`第 ${i + 1} 个URL图片上传失败: 未获取到 image_uri`);
         }
       } catch (error) {
-        logger.error(`第 ${i + 1} 张图片上传失败: ${error.message}`);
-        
-        // 图片上传失败时，停止视频生成避免浪费积分
+        logger.error(`第 ${i + 1} 个URL图片上传失败: ${error.message}`);
         if (i === 0) {
-          logger.error(`首帧图片上传失败，停止视频生成以避免浪费积分`);
           throw new APIException(EX.API_REQUEST_FAILED, `首帧图片上传失败: ${error.message}`);
-        } else {
-          logger.warn(`第 ${i + 1} 张图片上传失败，将跳过此图片继续处理`);
         }
       }
     }
-    
-    logger.info(`图片上传完成，成功上传 ${uploadIDs.length} 张图片`);
-    
-    // 如果没有成功上传任何图片，停止视频生成
-    if (uploadIDs.length === 0) {
-      logger.error(`所有图片上传失败，停止视频生成以避免浪费积分`);
-      throw new APIException(EX.API_REQUEST_FAILED, '所有图片上传失败，请检查图片URL是否有效');
-    }
-    
+  } else {
+    logger.info(`未提供图片文件或URL，将进行纯文本视频生成`);
+  }
+
+  // 如果有图片上传（无论来源），构建对象
+  if (uploadIDs.length > 0) {
+    logger.info(`图片上传完成，共成功 ${uploadIDs.length} 张`);
     // 构建首帧图片对象
     if (uploadIDs[0]) {
       first_frame_image = {
@@ -443,12 +473,9 @@ export async function generateVideo(
         width: width,
       };
       logger.info(`设置尾帧图片: ${uploadIDs[1]}`);
-    } else if (filePaths.length > 1) {
-      logger.warn(`第二张图片上传失败或未提供，将仅使用首帧图片`);
     }
-  } else {
-    logger.info(`未提供图片文件，将进行纯文本视频生成`);
   }
+
 
   const componentId = util.uuid();
   const metricsExtra = JSON.stringify({
@@ -546,7 +573,7 @@ export async function generateVideo(
           }],
         }),
         http_common_info: {
-          aid: Number(DEFAULT_ASSISTANT_ID),
+          aid: Number(DEFAULT_ASSISTANT_ID_CN),
         },
       },
     }
