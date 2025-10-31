@@ -137,7 +137,6 @@ export async function receiveCredit(refreshToken: string) {
  * @param params 请求参数
  * @param headers 请求头
  */
-import { BASE_URL_DREAMINA_US } from "@/api/consts/dreamina.ts";
 
 export async function request(
   method: string,
